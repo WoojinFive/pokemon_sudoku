@@ -259,10 +259,19 @@
     hintBadge.textContent = GS.hintsLeft;
   }
 
-  // ── Cell click — selection only (no placing) ─────────────
+  // ── Cell click ────────────────────────────────────────────
   function onCellClick(e) {
     if (GS.gameOver || GS.gameWon || GS.paused) return;
     const i = parseInt(e.currentTarget.dataset.idx);
+
+    // If a palette item is highlighted (mobile tap-select), place it
+    if (GS.highlightValue !== 0 && GS.puzzle[i] === 0) {
+      handleDrop(GS.highlightValue, i);
+      GS.highlightValue = 0;
+      renderGrid();
+      return;
+    }
+
     GS.selectedCell = (GS.selectedCell === i) ? -1 : i;
     renderGrid();
   }
@@ -541,8 +550,11 @@
   // ── Pointer Events (mobile drag) ──────────────────────────
   let pointerDragValue = 0;
   let pointerDragSrcCell = -1; // -1 = from palette, >=0 = from cell
+  let pointerStartX = 0, pointerStartY = 0;
+  let pointerMoved = false;    // true once movement exceeds TAP_THRESHOLD
   let ghostEl = null;
   let pointerActive = false;
+  const TAP_THRESHOLD = 10;   // px — below this = tap, above = drag
 
   function createGhost(info) {
     const g = document.createElement('div');
@@ -558,10 +570,11 @@
     e.currentTarget.setPointerCapture(e.pointerId);
     pointerDragValue = value;
     pointerDragSrcCell = srcCellIdx;
+    pointerStartX = e.clientX;
+    pointerStartY = e.clientY;
+    pointerMoved = false;
     pointerActive = true;
-    ghostEl = createGhost(GS.pokemonMap[value]);
-    ghostEl.style.left = e.clientX + 'px';
-    ghostEl.style.top = e.clientY + 'px';
+    // Highlight immediately so user sees which cells match
     GS.highlightValue = value;
     renderGrid();
     e.currentTarget.addEventListener('pointermove', onPointerMove, { passive: false });
@@ -587,34 +600,62 @@
   function onPointerMove(e) {
     if (!pointerActive) return;
     e.preventDefault();
+    const dx = e.clientX - pointerStartX;
+    const dy = e.clientY - pointerStartY;
+
+    // Create ghost only once movement exceeds threshold (avoids ghost on taps)
+    if (!pointerMoved && Math.hypot(dx, dy) >= TAP_THRESHOLD) {
+      pointerMoved = true;
+      ghostEl = createGhost(GS.pokemonMap[pointerDragValue]);
+    }
+
     if (ghostEl) {
       ghostEl.style.left = e.clientX + 'px';
       ghostEl.style.top = e.clientY + 'px';
     }
-    document.querySelectorAll('.cell.drag-over').forEach(c => c.classList.remove('drag-over'));
-    if (ghostEl) ghostEl.style.visibility = 'hidden';
-    const el = document.elementFromPoint(e.clientX, e.clientY);
-    if (ghostEl) ghostEl.style.visibility = '';
-    const cell = el && el.closest('.cell');
-    if (cell) cell.classList.add('drag-over');
+
+    if (pointerMoved) {
+      document.querySelectorAll('.cell.drag-over').forEach(c => c.classList.remove('drag-over'));
+      if (ghostEl) ghostEl.style.visibility = 'hidden';
+      const el = document.elementFromPoint(e.clientX, e.clientY);
+      if (ghostEl) ghostEl.style.visibility = '';
+      const cell = el && el.closest('.cell');
+      if (cell) cell.classList.add('drag-over');
+    }
   }
 
   function onPointerUp(e) {
     if (!pointerActive) return;
     pointerActive = false;
     cleanupPointer(e.currentTarget);
-
-    if (ghostEl) ghostEl.style.visibility = 'hidden';
-    const el = document.elementFromPoint(e.clientX, e.clientY);
-    if (ghostEl) { ghostEl.remove(); ghostEl = null; }
-
-    const targetCell = el && el.closest('.cell');
     document.querySelectorAll('.cell.drag-over').forEach(c => c.classList.remove('drag-over'));
 
     const val = pointerDragValue;
     const srcIdx = pointerDragSrcCell;
+    const wasDrag = pointerMoved;
     pointerDragValue = 0;
     pointerDragSrcCell = -1;
+    pointerMoved = false;
+
+    if (!wasDrag) {
+      // ── Tap (no movement) ──
+      if (ghostEl) { ghostEl.remove(); ghostEl = null; }
+
+      if (srcIdx === -1) {
+        // Tap on palette item: toggle highlight selection
+        GS.highlightValue = (GS.highlightValue === val) ? 0 : val;
+        renderGrid();
+      }
+      // Tap on cell: nothing extra (cell click handler covers selection)
+      return;
+    }
+
+    // ── Drag (movement) ── clear highlight after drop
+    if (ghostEl) ghostEl.style.visibility = 'hidden';
+    const el = document.elementFromPoint(e.clientX, e.clientY);
+    if (ghostEl) { ghostEl.remove(); ghostEl = null; }
+    const targetCell = el && el.closest('.cell');
+
     GS.highlightValue = 0;
     renderGrid();
 
@@ -622,12 +663,8 @@
       // Drag from cell
       if (targetCell) {
         const targetIdx = parseInt(targetCell.dataset.idx);
-        if (targetIdx !== srcIdx) {
-          eraseCell(srcIdx);
-          handleDrop(val, targetIdx);
-        }
+        if (targetIdx !== srcIdx) { eraseCell(srcIdx); handleDrop(val, targetIdx); }
       } else {
-        // Dropped outside grid → remove
         eraseCell(srcIdx);
       }
     } else {

@@ -552,6 +552,7 @@
   let pointerDragSrcCell = -1; // -1 = from palette, >=0 = from cell
   let pointerStartX = 0, pointerStartY = 0;
   let pointerMoved = false;    // true once movement exceeds TAP_THRESHOLD
+  let pointerPrevHighlight = 0; // highlightValue BEFORE this interaction started
   let ghostEl = null;
   let pointerActive = false;
   const TAP_THRESHOLD = 10;   // px — below this = tap, above = drag
@@ -574,7 +575,7 @@
     pointerStartY = e.clientY;
     pointerMoved = false;
     pointerActive = true;
-    // Highlight immediately so user sees which cells match
+    pointerPrevHighlight = GS.highlightValue; // save BEFORE changing
     GS.highlightValue = value;
     renderGrid();
     e.currentTarget.addEventListener('pointermove', onPointerMove, { passive: false });
@@ -642,8 +643,8 @@
       if (ghostEl) { ghostEl.remove(); ghostEl = null; }
 
       if (srcIdx === -1) {
-        // Tap on palette item: toggle highlight selection
-        GS.highlightValue = (GS.highlightValue === val) ? 0 : val;
+        // Tap on palette: keep highlight unless same item was already selected before tap
+        GS.highlightValue = (pointerPrevHighlight === val) ? 0 : val;
         renderGrid();
       }
       // Tap on cell: nothing extra (cell click handler covers selection)

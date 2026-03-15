@@ -307,7 +307,15 @@ main {
   overflow: hidden;
 }
 
-.palette-item:hover { background: #e8ecff; border-color: #aab8ff; transform: scale(1.08); }
+.palette-item:hover:not(.complete) { background: #e8ecff; border-color: #aab8ff; transform: scale(1.08); }
+
+/* All 9 placed — dim the item */
+.palette-item.complete {
+  opacity: 0.25;
+  filter: grayscale(60%);
+  cursor: default;
+  pointer-events: none;
+}
 
 .palette-item img {
   width: 80%;

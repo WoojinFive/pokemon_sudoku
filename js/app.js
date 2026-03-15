@@ -14,6 +14,7 @@
     mistakes: 0,
     hintsLeft: 3,
     selectedCell: -1,   // flat index (for row/col/box highlight only)
+    highlightValue: 0,  // value being hovered/dragged from palette
     history: [],        // [{idx, prevValue}]
     notesMode: false,
     notes: null,        // Array(81) of Set
@@ -130,6 +131,9 @@
     if (val !== 0 && !isGiven) {
       if (hasConflict(GS.board, r, c, val)) cls.push('error');
     }
+    if (val !== 0 && GS.highlightValue !== 0 && val === GS.highlightValue) {
+      cls.push('highlight-value');
+    }
 
     if (GS.hintedCells && GS.hintedCells.has(i)) cls.push('hinted');
 
@@ -188,24 +192,47 @@
     }
   }
 
+  function countOnBoard(v) {
+    let n = 0;
+    for (let i = 0; i < 81; i++) if (GS.board[i] === v) n++;
+    return n;
+  }
+
   function renderPalette() {
     palette.innerHTML = '';
     for (let v = 1; v <= 9; v++) {
       const item = document.createElement('div');
-      item.className = 'palette-item';
+      const complete = countOnBoard(v) >= 9;
+      item.className = 'palette-item' + (complete ? ' complete' : '');
       item.dataset.value = v;
-      item.draggable = true;
+      item.draggable = !complete;
 
       const info = GS.pokemonMap[v];
       const el = makePokemonElement(info);
       if (el) item.appendChild(el);
 
-      item.addEventListener('dragstart', onPaletteDragStart);
-      item.addEventListener('dragend', onPaletteDragEnd);
-      item.addEventListener('pointerdown', onPointerDown);
+      if (!complete) {
+        item.addEventListener('dragstart', onPaletteDragStart);
+        item.addEventListener('dragend', onPaletteDragEnd);
+        item.addEventListener('pointerdown', onPointerDown);
+      }
+
+      // Hover highlight (mouse)
+      item.addEventListener('mouseenter', () => { GS.highlightValue = v; renderGrid(); });
+      item.addEventListener('mouseleave', () => { GS.highlightValue = 0; renderGrid(); });
 
       palette.appendChild(item);
     }
+  }
+
+  // Refresh palette complete-state after board changes
+  function updatePaletteCompletion() {
+    palette.querySelectorAll('.palette-item').forEach(item => {
+      const v = parseInt(item.dataset.value);
+      const complete = countOnBoard(v) >= 9;
+      item.classList.toggle('complete', complete);
+      item.draggable = !complete;
+    });
   }
 
   // True if `val` already exists in the same row, col, or 3×3 box (ignoring the cell itself)
@@ -281,11 +308,13 @@
 
     if (SudokuEngine.isBoardComplete(GS.board, GS.solution)) {
       renderGrid();
+      updatePaletteCompletion();
       triggerWin();
       return;
     }
 
     renderGrid();
+    updatePaletteCompletion();
   }
 
   // ── Undo ──────────────────────────────────────────────────
@@ -295,6 +324,7 @@
     GS.board[idx] = prevValue;
     GS.selectedCell = idx;
     renderGrid();
+    updatePaletteCompletion();
   }
 
   // ── Erase ─────────────────────────────────────────────────
@@ -329,10 +359,12 @@
 
     if (SudokuEngine.isBoardComplete(GS.board, GS.solution)) {
       renderGrid();
+      updatePaletteCompletion();
       triggerWin();
       return;
     }
     renderGrid();
+    updatePaletteCompletion();
   }
 
   // ── Win / Game Over ───────────────────────────────────────
@@ -429,11 +461,15 @@
     e.dataTransfer.effectAllowed = 'copy';
     e.dataTransfer.setDragImage(BLANK_DRAG_IMG, 0, 0);
     showDndGhost(GS.pokemonMap[dragValue], e.clientX, e.clientY);
+    GS.highlightValue = dragValue;
+    renderGrid();
   }
 
   function onPaletteDragEnd() {
     dragValue = 0;
     clearDndGhost();
+    GS.highlightValue = 0;
+    renderGrid();
     document.querySelectorAll('.cell.drag-over').forEach(c => c.classList.remove('drag-over'));
   }
 
@@ -497,8 +533,9 @@
     GS.history.push({ idx: i, prevValue: GS.board[i] });
     GS.board[i] = 0;
     GS.hintedCells.delete(i);
-    if (GS.selectedCell === i) GS.selectedCell = -1; // deselect immediately
+    if (GS.selectedCell === i) GS.selectedCell = -1;
     renderGrid();
+    updatePaletteCompletion();
   }
 
   // ── Pointer Events (mobile drag) ──────────────────────────
@@ -525,6 +562,8 @@
     ghostEl = createGhost(GS.pokemonMap[value]);
     ghostEl.style.left = e.clientX + 'px';
     ghostEl.style.top = e.clientY + 'px';
+    GS.highlightValue = value;
+    renderGrid();
     e.currentTarget.addEventListener('pointermove', onPointerMove, { passive: false });
     e.currentTarget.addEventListener('pointerup', onPointerUp);
     e.currentTarget.addEventListener('pointercancel', onPointerCancel);
@@ -576,6 +615,8 @@
     const srcIdx = pointerDragSrcCell;
     pointerDragValue = 0;
     pointerDragSrcCell = -1;
+    GS.highlightValue = 0;
+    renderGrid();
 
     if (srcIdx !== -1) {
       // Drag from cell

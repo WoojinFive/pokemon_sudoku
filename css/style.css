@@ -1,0 +1,418 @@
+/* ===== Reset & Base ===== */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: 'Segoe UI', sans-serif;
+  background: #f0f4ff;
+  color: #222;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 12px;
+  user-select: none;
+}
+
+/* ===== Header ===== */
+header {
+  width: 100%;
+  max-width: 520px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+h1 {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: #3355aa;
+  flex: 1;
+  white-space: nowrap;
+}
+
+.difficulty-select {
+  display: flex;
+  gap: 4px;
+}
+
+.diff-btn {
+  padding: 4px 10px;
+  border: 2px solid #3355aa;
+  border-radius: 20px;
+  background: transparent;
+  color: #3355aa;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.diff-btn.active, .diff-btn:hover {
+  background: #3355aa;
+  color: white;
+}
+
+#new-game-btn {
+  padding: 6px 14px;
+  background: #e74c3c;
+  color: white;
+  border: none;
+  border-radius: 20px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+#new-game-btn:hover { background: #c0392b; }
+
+/* ===== Stats Bar ===== */
+#stats-bar {
+  width: 100%;
+  max-width: 520px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: white;
+  border-radius: 10px;
+  padding: 8px 16px;
+  margin-bottom: 10px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+#timer-section {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+#timer-display { font-variant-numeric: tabular-nums; }
+
+#pause-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 1rem;
+  line-height: 1;
+  padding: 0;
+  opacity: 0.7;
+}
+#pause-btn:hover { opacity: 1; }
+
+/* ===== Loading ===== */
+#loading-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(240,244,255,0.85);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.spinner {
+  width: 44px;
+  height: 44px;
+  border: 5px solid #ccd6ff;
+  border-top-color: #3355aa;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  margin-bottom: 12px;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.hidden { display: none !important; }
+
+/* ===== Main Layout ===== */
+main {
+  width: 100%;
+  max-width: 520px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+/* ===== Sudoku Grid ===== */
+#sudoku-grid {
+  display: grid;
+  grid-template-columns: repeat(9, 1fr);
+  width: min(96vw, 500px);
+  aspect-ratio: 1;
+  border: 3px solid #333;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.cell {
+  background: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 1;
+  position: relative;
+  cursor: pointer;
+  transition: background 0.1s;
+  overflow: hidden;
+  /* 모든 셀: 오른쪽·아래 얇은 선 */
+  border-right: 1px solid #bbb;
+  border-bottom: 1px solid #bbb;
+}
+
+/* 마지막 열·행은 외곽 border가 처리 */
+.cell[data-col="8"] { border-right: none; }
+.cell[data-row="8"] { border-bottom: none; }
+
+/* 3×3 박스 경계 — 오른쪽 굵은 선 */
+.cell[data-col="2"],
+.cell[data-col="5"] { border-right: 2px solid #444; }
+
+/* 3×3 박스 경계 — 아래 굵은 선 */
+.cell[data-row="2"],
+.cell[data-row="5"] { border-bottom: 2px solid #444; }
+
+/* Cell states */
+.cell.given { background: #f0e6c8; cursor: default; }   /* warm cream — clearly distinct from white */
+.cell.selected { background: #ccd6ff; }
+.cell.highlight { background: #e6f0ff; }
+.cell.highlight-value { background: #d0e8ff; }
+.cell.error { background: #ffe0e0; }
+.cell.error.selected { background: #ffb0b0; }
+
+/* Cell image — fixed square so all sprites look uniform */
+.cell img {
+  width: 76%;
+  height: 76%;
+  object-fit: contain;
+  pointer-events: none;
+  display: block;
+  flex-shrink: 0;
+}
+
+/* Notes mini-grid */
+.notes-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(3, 1fr);
+  width: 100%;
+  height: 100%;
+  padding: 1px;
+}
+
+.note-cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.note-cell img {
+  width: 90%;
+  height: 90%;
+  object-fit: contain;
+  pointer-events: none;
+}
+
+/* Hint-revealed cell */
+.cell.hinted { background: #fffbe6; }
+.cell.hinted::after {
+  content: '💡';
+  position: absolute;
+  top: 1px;
+  right: 2px;
+  font-size: 0.55em;
+  line-height: 1;
+  pointer-events: none;
+}
+
+/* Drop target highlight */
+.cell.drag-over {
+  background: #aac8ff;
+  outline: 2px dashed #3355aa;
+  outline-offset: -2px;
+}
+
+/* ===== Controls ===== */
+#controls {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+  justify-content: center;
+}
+
+#controls button {
+  flex: 1;
+  max-width: 100px;
+  padding: 8px 4px;
+  border: 2px solid #3355aa;
+  border-radius: 10px;
+  background: white;
+  color: #3355aa;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  position: relative;
+}
+
+#controls button:hover { background: #3355aa; color: white; }
+#controls button.active { background: #3355aa; color: white; }
+
+#hint-badge {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  background: #e74c3c;
+  color: white;
+  font-size: 0.7rem;
+  border-radius: 50%;
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+}
+
+/* ===== Pokemon Palette ===== */
+#pokemon-palette {
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+  gap: 4px;
+  padding: 8px;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+}
+
+.palette-item {
+  flex: 1;
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid transparent;
+  border-radius: 8px;
+  cursor: grab;
+  touch-action: none;
+  background: #f8f9ff;
+  transition: border-color 0.15s, background 0.15s, transform 0.1s;
+  position: relative;
+  overflow: hidden;
+}
+
+.palette-item:hover { background: #e8ecff; border-color: #aab8ff; transform: scale(1.08); }
+
+.palette-item img {
+  width: 80%;
+  height: 80%;
+  object-fit: contain;
+  pointer-events: none;
+  display: block;
+}
+
+.palette-fallback {
+  width: 80%;
+  height: 80%;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 1rem;
+  pointer-events: none;
+}
+
+/* Drag ghost */
+#drag-ghost {
+  position: fixed;
+  pointer-events: none;
+  z-index: 999;
+  width: 56px;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255,255,255,0.9);
+  border-radius: 50%;
+  border: 2px solid #3355aa;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+  transform: translate(-50%, -50%);
+}
+
+#drag-ghost img {
+  width: 80%;
+  height: 80%;
+  object-fit: contain;
+}
+
+/* ===== Modals ===== */
+.modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+}
+
+.modal-content {
+  background: white;
+  border-radius: 16px;
+  padding: 32px 40px;
+  text-align: center;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+  max-width: 320px;
+  width: 90%;
+}
+
+.modal-content h2 {
+  font-size: 1.6rem;
+  margin-bottom: 10px;
+  color: #3355aa;
+}
+
+.modal-content p {
+  margin-bottom: 8px;
+  color: #555;
+}
+
+.modal-content button {
+  margin-top: 16px;
+  padding: 10px 28px;
+  background: #3355aa;
+  color: white;
+  border: none;
+  border-radius: 24px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.modal-content button:hover { background: #2244aa; }
+
+/* ===== Instructions ===== */
+.instructions {
+  width: 100%;
+  text-align: center;
+  font-size: 0.82rem;
+  color: #777;
+  line-height: 1.6;
+  padding: 4px 8px;
+}
+
+.instructions strong { color: #3355aa; }
+
+/* ===== Responsive ===== */
+@media (max-width: 420px) {
+  h1 { font-size: 1.1rem; }
+  #stats-bar { font-size: 0.8rem; padding: 6px 10px; }
+  #controls button { font-size: 0.72rem; padding: 7px 2px; }
+}

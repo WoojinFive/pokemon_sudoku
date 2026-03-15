@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pokémon Sudoku</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <header>
+    <h1>Pokémon Sudoku</h1>
+    <div class="difficulty-select">
+      <button class="diff-btn active" data-diff="easy">Easy</button>
+      <button class="diff-btn" data-diff="medium">Medium</button>
+      <button class="diff-btn" data-diff="hard">Hard</button>
+    </div>
+    <button id="new-game-btn">New Game</button>
+  </header>
+
+  <div id="stats-bar">
+    <span id="mistakes-display">Mistakes: <span id="mistake-count">0</span>/3</span>
+    <div id="timer-section">
+      <span id="timer-display">00:00</span>
+      <button id="pause-btn" title="Pause">⏸</button>
+    </div>
+    <span id="hints-display">Hints: <span id="hint-count">3</span></span>
+  </div>
+
+  <div id="loading-overlay" class="hidden">
+    <div class="spinner"></div>
+    <p>Loading...</p>
+  </div>
+
+  <main>
+    <div id="sudoku-grid"></div>
+
+    <div id="controls">
+      <button id="undo-btn" title="Undo">↩ Undo</button>
+      <button id="erase-btn" title="Erase">✕ Erase</button>
+      <button id="notes-btn" title="Notes Mode">✎ Notes</button>
+      <button id="hint-btn" title="Hint">💡 Hint <span id="hint-badge">3</span></button>
+    </div>
+
+    <div id="pokemon-palette"></div>
+
+    <p class="instructions">
+      <strong>Drag &amp; drop</strong> a Pokémon from the tray onto an empty cell to place it.<br>
+      To remove, <strong>drag the Pokémon out</strong> of the cell and drop it anywhere outside the grid.
+    </p>
+  </main>
+
+  <!-- Win Modal -->
+  <div id="win-modal" class="modal hidden">
+    <div class="modal-content">
+      <h2>Congratulations!</h2>
+      <p>You solved the puzzle!</p>
+      <p id="win-time"></p>
+      <button id="win-new-game">Play Again</button>
+    </div>
+  </div>
+
+  <!-- Game Over Modal -->
+  <div id="gameover-modal" class="modal hidden">
+    <div class="modal-content">
+      <h2>Game Over</h2>
+      <p>Too many mistakes!</p>
+      <button id="gameover-new-game">Try Again</button>
+    </div>
+  </div>
+
+  <!-- Paused Overlay -->
+  <div id="paused-overlay" class="modal hidden">
+    <div class="modal-content">
+      <h2>Paused</h2>
+      <button id="resume-btn">Resume</button>
+    </div>
+  </div>
+
+  <script src="js/sudoku.js"></script>
+  <script src="js/pokemon.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

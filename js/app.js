@@ -129,7 +129,7 @@
     if (isSelected) cls.push('selected');
 
     if (val !== 0 && !isGiven) {
-      if (hasConflict(GS.board, r, c, val)) cls.push('error');
+      if (val !== GS.solution[i]) cls.push('error');
     }
     if (val !== 0 && GS.highlightValue !== 0 && val === GS.highlightValue) {
       cls.push('highlight-value');

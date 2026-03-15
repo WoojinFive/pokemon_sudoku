@@ -416,27 +416,36 @@
   async function triggerWin() {
     GS.gameWon = true;
     stopTimer();
+    const elapsed = GS.elapsedSeconds;
+
     const p = winModal.querySelector('#win-time');
-    if (p) p.textContent = `Time: ${formatTime(GS.elapsedSeconds)}`;
+    if (p) p.textContent = `Time: ${formatTime(elapsed)}`;
+
+    // Reset name input section (hidden by default)
+    const nameInput = $('player-name-input');
+    const saveBtn = $('save-record-btn');
+    const newRecordSection = $('new-record-section');
+    if (nameInput) nameInput.value = '';
+    if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Save Record'; }
+    if (newRecordSection) newRecordSection.classList.add('hidden');
+
     winModal.classList.remove('hidden');
 
-    // Check leaderboard qualification
-    const newRecordSection = $('new-record-section');
-    if (newRecordSection) newRecordSection.classList.add('hidden');
-    const nameInput = $('player-name-input');
-    if (nameInput) nameInput.value = '';
-
+    // Check top 10 qualification
+    let qualifies = true; // default: show input if check can't run
     const lb = window.FirebaseLeaderboard;
     if (lb) {
       try {
-        const qualifies = await lb.qualifiesForTop10(GS.elapsedSeconds);
-        if (qualifies && newRecordSection) {
-          newRecordSection.classList.remove('hidden');
-          if (nameInput) nameInput.focus();
-        }
+        qualifies = await lb.qualifiesForTop10(elapsed);
       } catch (e) {
         console.error('Leaderboard check failed:', e);
+        qualifies = true; // fail open: show input on error
       }
+    }
+
+    if (qualifies && newRecordSection) {
+      newRecordSection.classList.remove('hidden');
+      if (nameInput) nameInput.focus();
     }
   }
 
@@ -787,16 +796,21 @@
 
   $('save-record-btn').addEventListener('click', async () => {
     const btn = $('save-record-btn');
-    const name = ($('player-name-input').value || '').trim() || 'Anonymous';
+    const nameInput = $('player-name-input');
+    const name = (nameInput.value || '').trim() || 'Anonymous';
+    const lb = window.FirebaseLeaderboard;
+    if (!lb) { alert('Leaderboard not available yet. Try again shortly.'); return; }
     btn.disabled = true;
     btn.textContent = 'Saving...';
     try {
-      await window.FirebaseLeaderboard.addScore(name, GS.elapsedSeconds);
-      $('new-record-section').classList.add('hidden');
+      await lb.addScore(name, GS.elapsedSeconds);
+      btn.textContent = 'Saved!';
+      setTimeout(() => $('new-record-section').classList.add('hidden'), 800);
     } catch (e) {
       console.error('Save failed:', e);
       btn.disabled = false;
       btn.textContent = 'Save Record';
+      alert('Failed to save record. Check Firestore rules.');
     }
   });
 

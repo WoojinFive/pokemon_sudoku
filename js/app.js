@@ -376,13 +376,68 @@
     updatePaletteCompletion();
   }
 
+  // ── Leaderboard ───────────────────────────────────────────
+  async function showLeaderboard() {
+    const modal = $('leaderboard-modal');
+    const list = $('leaderboard-list');
+    modal.classList.remove('hidden');
+    list.innerHTML = '<p class="lb-loading">Loading...</p>';
+    try {
+      const lb = window.FirebaseLeaderboard;
+      if (!lb) { list.innerHTML = '<p class="lb-loading">Leaderboard unavailable.</p>'; return; }
+      const scores = await lb.getTopScores();
+      if (scores.length === 0) {
+        list.innerHTML = '<p class="lb-loading">No records yet!</p>';
+        return;
+      }
+      const medals = ['🥇','🥈','🥉'];
+      list.innerHTML = scores.map((s, idx) => {
+        const rankClass = idx < 3 ? ` rank-${idx + 1}` : '';
+        const medal = idx < 3
+          ? `<span class="leaderboard-medal">${medals[idx]}</span>`
+          : `<span class="leaderboard-rank">${idx + 1}</span>`;
+        return `<div class="leaderboard-row${rankClass}">
+          ${medal}
+          <span class="leaderboard-name">${escapeHtml(s.name)}</span>
+          <span class="leaderboard-time">${formatTime(s.time)}</span>
+        </div>`;
+      }).join('');
+    } catch (err) {
+      list.innerHTML = '<p class="lb-loading">Failed to load records.</p>';
+      console.error(err);
+    }
+  }
+
+  function escapeHtml(str) {
+    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
   // ── Win / Game Over ───────────────────────────────────────
-  function triggerWin() {
+  async function triggerWin() {
     GS.gameWon = true;
     stopTimer();
     const p = winModal.querySelector('#win-time');
     if (p) p.textContent = `Time: ${formatTime(GS.elapsedSeconds)}`;
     winModal.classList.remove('hidden');
+
+    // Check leaderboard qualification
+    const newRecordSection = $('new-record-section');
+    if (newRecordSection) newRecordSection.classList.add('hidden');
+    const nameInput = $('player-name-input');
+    if (nameInput) nameInput.value = '';
+
+    const lb = window.FirebaseLeaderboard;
+    if (lb) {
+      try {
+        const qualifies = await lb.qualifiesForTop10(GS.elapsedSeconds);
+        if (qualifies && newRecordSection) {
+          newRecordSection.classList.remove('hidden');
+          if (nameInput) nameInput.focus();
+        }
+      } catch (e) {
+        console.error('Leaderboard check failed:', e);
+      }
+    }
   }
 
   function triggerGameOver() {
@@ -726,6 +781,29 @@
 
   $('pause-btn').addEventListener('click', togglePause);
   $('resume-btn').addEventListener('click', togglePause);
+
+  $('records-btn').addEventListener('click', showLeaderboard);
+  $('leaderboard-close').addEventListener('click', () => $('leaderboard-modal').classList.add('hidden'));
+
+  $('save-record-btn').addEventListener('click', async () => {
+    const btn = $('save-record-btn');
+    const name = ($('player-name-input').value || '').trim() || 'Anonymous';
+    btn.disabled = true;
+    btn.textContent = 'Saving...';
+    try {
+      await window.FirebaseLeaderboard.addScore(name, GS.elapsedSeconds);
+      $('new-record-section').classList.add('hidden');
+    } catch (e) {
+      console.error('Save failed:', e);
+      btn.disabled = false;
+      btn.textContent = 'Save Record';
+    }
+  });
+
+  $('win-view-records').addEventListener('click', () => {
+    winModal.classList.add('hidden');
+    showLeaderboard();
+  });
 
   $('win-new-game').addEventListener('click', () => {
     winModal.classList.add('hidden');

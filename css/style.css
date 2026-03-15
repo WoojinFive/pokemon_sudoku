@@ -220,6 +220,8 @@ main {
 
 /* Hint-revealed cell */
 .cell.hinted { background: #fffbe6; }
+/* hinted + highlight-value: highlight wins */
+.cell.hinted.highlight-value { background: #d0e8ff; }
 .cell.hinted::after {
   content: '💡';
   position: absolute;
@@ -417,6 +419,82 @@ main {
 }
 
 .instructions strong { color: #3355aa; }
+
+/* ===== Records Button ===== */
+#records-btn {
+  background: none;
+  border: 2px solid #3355aa;
+  border-radius: 20px;
+  color: #3355aa;
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 3px 10px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+#records-btn:hover { background: #3355aa; color: white; }
+
+/* ===== Win Modal extras ===== */
+.win-btn-row {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+.win-btn-row button { margin-top: 16px; }
+
+#new-record-section { margin: 14px 0 4px; }
+.new-record-label { color: #e74c3c; font-weight: 700; margin-bottom: 8px; font-size: 0.95rem; }
+
+#player-name-input {
+  width: 100%;
+  padding: 8px 12px;
+  border: 2px solid #3355aa;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  margin-bottom: 8px;
+  outline: none;
+  box-sizing: border-box;
+}
+#player-name-input:focus { border-color: #5577cc; }
+
+#save-record-btn {
+  background: #e74c3c;
+  color: white;
+  border: none;
+  border-radius: 20px;
+  padding: 8px 22px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+#save-record-btn:hover { background: #c0392b; }
+#save-record-btn:disabled { opacity: 0.5; cursor: default; }
+
+/* ===== Leaderboard Modal ===== */
+.leaderboard-content { max-width: 380px; }
+
+#leaderboard-list { margin: 12px 0; text-align: left; min-height: 60px; }
+
+.lb-loading { text-align: center; color: #999; padding: 20px 0; }
+
+.leaderboard-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  margin-bottom: 3px;
+  font-size: 0.88rem;
+}
+.leaderboard-row:nth-child(even) { background: #f8f9ff; }
+.leaderboard-row.rank-1 { background: #fff8dc; font-weight: 700; }
+.leaderboard-row.rank-2 { background: #f5f5f5; font-weight: 600; }
+.leaderboard-row.rank-3 { background: #fff3e0; font-weight: 600; }
+.leaderboard-medal { font-size: 1rem; width: 22px; text-align: center; }
+.leaderboard-rank { width: 22px; font-weight: 700; color: #3355aa; text-align: center; }
+.leaderboard-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.leaderboard-time { font-variant-numeric: tabular-nums; color: #555; white-space: nowrap; }
 
 /* ===== Responsive ===== */
 @media (max-width: 420px) {

@@ -503,6 +503,95 @@ main {
 .bonus-choice-name.correct { border-color: #27ae60; background: #eafaf1; color: #1a7a40; }
 .bonus-choice-name.wrong   { border-color: #e74c3c; background: #fdf0f0; color: #c0392b; }
 
+/* ===== Who's that? Button ===== */
+#name-quiz-btn {
+  padding: 6px 12px;
+  background: #8e44ad;
+  color: white;
+  border: none;
+  border-radius: 20px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+  white-space: nowrap;
+}
+#name-quiz-btn:hover { background: #6c3483; }
+
+/* ===== Pokemon Name Quiz Modal ===== */
+.name-quiz-content { max-width: 320px; position: relative; padding: 28px 24px 24px; }
+
+#name-quiz-close {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: none;
+  background: #aaa;
+  color: white;
+  font-size: 0.8rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+#name-quiz-close:hover { background: #888; }
+
+#name-quiz-score {
+  font-size: 1rem;
+  font-weight: 700;
+  margin-bottom: 12px;
+  color: #333;
+}
+
+#name-quiz-pokemon {
+  width: 130px;
+  height: 130px;
+  margin: 0 auto 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+#name-quiz-pokemon img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  filter: brightness(0);
+}
+#name-quiz-pokemon img.revealed { filter: none; }
+
+#name-quiz-desc {
+  font-size: 0.85rem;
+  color: #555;
+  margin-bottom: 10px;
+  min-height: 1.2em;
+}
+
+#name-quiz-choices {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
+#name-quiz-next {
+  margin-top: 14px;
+  width: 100%;
+  padding: 10px;
+  background: #8e44ad;
+  color: white;
+  border: none;
+  border-radius: 10px;
+  font-size: 0.95rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+#name-quiz-next:hover { background: #6c3483; }
+
 /* ===== Records Button ===== */
 #records-btn {
   background: none;

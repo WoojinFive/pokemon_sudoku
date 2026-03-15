@@ -460,6 +460,93 @@
 
   }
 
+  // ── Pokemon Name Quiz (standalone) ────────────────────────
+  const NQ = { correct: 0, wrong: 0 };
+
+  function openNameQuiz() {
+    NQ.correct = 0;
+    NQ.wrong = 0;
+    updateNQScore();
+    $('name-quiz-next').classList.add('hidden');
+    $('name-quiz-choices').innerHTML = '';
+    $('name-quiz-pokemon').innerHTML = '';
+    $('name-quiz-desc').textContent = '';
+    $('name-quiz-modal').classList.remove('hidden');
+    loadNQRound();
+  }
+
+  function updateNQScore() {
+    $('nq-correct').textContent = NQ.correct;
+    $('nq-wrong').textContent = NQ.wrong;
+  }
+
+  async function loadNQRound() {
+    $('name-quiz-next').classList.add('hidden');
+    $('name-quiz-choices').innerHTML = '';
+    $('name-quiz-desc').textContent = 'Loading...';
+
+    const answerID = randInt(1025) + 1;
+    const wrongIDs = new Set();
+    while (wrongIDs.size < 3) {
+      const id = randInt(1025) + 1;
+      if (id !== answerID) wrongIDs.add(id);
+    }
+
+    try {
+      const names = await Promise.all([answerID, ...[...wrongIDs]].map(fetchPokemonName));
+      const answerName = names[0];
+      const choices = shuffleArr(names.map((name, i) => ({ name, correct: i === 0 })));
+
+      // Silhouette image
+      const pokemonEl = $('name-quiz-pokemon');
+      pokemonEl.innerHTML = '';
+      const img = document.createElement('img');
+      img.src = `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${answerID}.png`;
+      img.onerror = () => { img.src = `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${answerID}.png`; };
+      img.alt = answerName;
+      pokemonEl.appendChild(img);
+
+      // Choice buttons (reuse .bonus-choice-name style)
+      const choicesEl = $('name-quiz-choices');
+      choicesEl.innerHTML = '';
+      choices.forEach(({ name, correct }) => {
+        const btn = document.createElement('button');
+        btn.className = 'bonus-choice-name';
+        btn.textContent = capitalize(name);
+        btn.dataset.correct = correct ? 'true' : 'false';
+        btn.addEventListener('click', () => handleNQAnswer(btn, correct, choicesEl, img));
+        choicesEl.appendChild(btn);
+      });
+
+      $('name-quiz-desc').textContent = "What's this Pokémon's name?";
+
+    } catch (e) {
+      console.error(e);
+      $('name-quiz-desc').textContent = 'Failed to load. Try next.';
+      $('name-quiz-next').classList.remove('hidden');
+    }
+  }
+
+  function handleNQAnswer(clickedBtn, correct, choicesEl, img) {
+    choicesEl.querySelectorAll('.bonus-choice-name').forEach(b => {
+      b.disabled = true;
+      if (b.dataset.correct === 'true') b.classList.add('correct');
+    });
+    if (!correct) clickedBtn.classList.add('wrong');
+
+    if (img) img.classList.add('revealed');
+
+    if (correct) {
+      NQ.correct++;
+      $('name-quiz-desc').textContent = '🎉 Correct!';
+    } else {
+      NQ.wrong++;
+      $('name-quiz-desc').textContent = '❌ Wrong!';
+    }
+    updateNQScore();
+    $('name-quiz-next').classList.remove('hidden');
+  }
+
   // ── Hint ──────────────────────────────────────────────────
   function doHint() {
     if (GS.gameOver || GS.gameWon || GS.paused) return;
@@ -911,6 +998,10 @@
   $('resume-btn').addEventListener('click', togglePause);
 
   $('bonus-hint-close').addEventListener('click', () => $('bonus-hint-modal').classList.add('hidden'));
+
+  $('name-quiz-btn').addEventListener('click', openNameQuiz);
+  $('name-quiz-close').addEventListener('click', () => $('name-quiz-modal').classList.add('hidden'));
+  $('name-quiz-next').addEventListener('click', loadNQRound);
 
   $('records-btn').addEventListener('click', showLeaderboard);
   $('leaderboard-close').addEventListener('click', () => $('leaderboard-modal').classList.add('hidden'));

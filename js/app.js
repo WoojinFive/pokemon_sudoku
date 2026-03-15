@@ -292,11 +292,6 @@
       return;
     }
 
-    // Check for obvious conflict BEFORE placing (same value in row/col/box)
-    const row = Math.floor(cellIdx / 9);
-    const col = cellIdx % 9;
-    const isConflict = hasConflict(GS.board, row, col, value);
-
     GS.history.push({ idx: cellIdx, prevValue: GS.board[cellIdx] });
     GS.board[cellIdx] = value;
 
@@ -305,7 +300,7 @@
 
     if (GS.notes[cellIdx]) GS.notes[cellIdx].clear();
 
-    if (isConflict) {
+    if (value !== GS.solution[cellIdx]) {
       GS.mistakes++;
       updateStats();
       if (GS.mistakes >= 3) {

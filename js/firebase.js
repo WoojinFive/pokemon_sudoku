@@ -21,10 +21,11 @@
     return snap.docs.map(d => d.data());
   }
 
-  async function addScore(name, timeSeconds) {
+  async function addScore(name, timeSeconds, difficulty) {
     await db.collection(COL).add({
       name: name.trim() || 'Anonymous',
       time: timeSeconds,
+      difficulty: difficulty || 'easy',
       createdAt: firebase.firestore.FieldValue.serverTimestamp()
     });
   }

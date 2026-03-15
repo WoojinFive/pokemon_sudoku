@@ -396,9 +396,11 @@
         const medal = idx < 3
           ? `<span class="leaderboard-medal">${medals[idx]}</span>`
           : `<span class="leaderboard-rank">${idx + 1}</span>`;
+        const diffLabel = { easy: 'Easy', medium: 'Med', hard: 'Hard' }[s.difficulty] || s.difficulty || '';
         return `<div class="leaderboard-row${rankClass}">
           ${medal}
           <span class="leaderboard-name">${escapeHtml(s.name)}</span>
+          <span class="leaderboard-diff ${s.difficulty || ''}">${diffLabel}</span>
           <span class="leaderboard-time">${formatTime(s.time)}</span>
         </div>`;
       }).join('');
@@ -803,7 +805,7 @@
     btn.disabled = true;
     btn.textContent = 'Saving...';
     try {
-      await lb.addScore(name, GS.elapsedSeconds);
+      await lb.addScore(name, GS.elapsedSeconds, GS.difficulty);
       btn.textContent = 'Saved!';
       setTimeout(() => $('new-record-section').classList.add('hidden'), 800);
     } catch (e) {

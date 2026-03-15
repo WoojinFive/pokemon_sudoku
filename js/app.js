@@ -24,6 +24,7 @@
     paused: false,
     gameOver: false,
     gameWon: false,
+    bonusHintUsed: false,  // bonus quiz attempted (only once per game)
   };
 
   // ── DOM refs ──────────────────────────────────────────────
@@ -257,6 +258,18 @@
     mistakeCount.textContent = GS.mistakes;
     hintCount.textContent = GS.hintsLeft;
     hintBadge.textContent = GS.hintsLeft;
+    updateHintButton();
+  }
+
+  function updateHintButton() {
+    const btn = $('hint-btn');
+    if (GS.hintsLeft === 0 && !GS.bonusHintUsed && !GS.gameOver && !GS.gameWon) {
+      btn.classList.add('get-hints');
+      btn.innerHTML = '🎁 Get Hints!';
+    } else {
+      btn.classList.remove('get-hints');
+      btn.innerHTML = `💡 Hint <span id="hint-badge">${GS.hintsLeft}</span>`;
+    }
   }
 
   // ── Cell click ────────────────────────────────────────────
@@ -343,9 +356,117 @@
     eraseCell(i);
   }
 
+  // ── Bonus Hint Quiz ────────────────────────────────────────
+  function randInt(max) { return Math.floor(Math.random() * max); }
+
+  function shuffleArr(arr) {
+    for (let i = arr.length - 1; i > 0; i--) {
+      const j = randInt(i + 1);
+      [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+    return arr;
+  }
+
+  async function fetchPokemonName(id) {
+    const res = await fetch(`https://pokeapi.co/api/v2/pokemon/${id}`);
+    if (!res.ok) throw new Error(`Pokemon ${id} not found`);
+    const data = await res.json();
+    return data.name; // e.g. "bulbasaur"
+  }
+
+  function capitalize(str) {
+    return str.charAt(0).toUpperCase() + str.slice(1).replace(/-/g, ' ');
+  }
+
+  async function showBonusHintQuiz() {
+    if (GS.bonusHintUsed || GS.gameOver || GS.gameWon || GS.paused) return;
+
+    // Open modal with loading state (don't mark as used yet — close button is free)
+    const modal = $('bonus-hint-modal');
+    $('bonus-hint-desc').innerHTML = 'Loading...';
+    $('bonus-hint-pokemon').innerHTML = '';
+    $('bonus-hint-choices').innerHTML = '';
+    modal.classList.remove('hidden');
+
+    // Pick answer ID from 1–1025
+    const answerID = randInt(1025) + 1;
+
+    // Pick 3 distinct wrong IDs
+    const wrongIDs = new Set();
+    while (wrongIDs.size < 3) {
+      const id = randInt(1025) + 1;
+      if (id !== answerID) wrongIDs.add(id);
+    }
+    const allIDs = [answerID, ...[...wrongIDs]];
+
+    try {
+      const names = await Promise.all(allIDs.map(fetchPokemonName));
+      const answerName = names[0];
+      const choices = shuffleArr(names.map((name, i) => ({ name, correct: i === 0 })));
+
+      // Show Pokemon image
+      const pokemonEl = $('bonus-hint-pokemon');
+      pokemonEl.innerHTML = '';
+      const img = document.createElement('img');
+      img.src = `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${answerID}.png`;
+      img.onerror = () => { img.src = `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${answerID}.png`; };
+      img.alt = answerName;
+      pokemonEl.appendChild(img);
+
+      // Show 4 name choice buttons
+      const choicesEl = $('bonus-hint-choices');
+      choicesEl.innerHTML = '';
+      choices.forEach(({ name, correct }) => {
+        const btn = document.createElement('button');
+        btn.className = 'bonus-choice-name';
+        btn.textContent = capitalize(name);
+        btn.dataset.correct = correct ? 'true' : 'false';
+        btn.addEventListener('click', () => handleBonusAnswer(btn, correct, choicesEl));
+        choicesEl.appendChild(btn);
+      });
+
+      $('bonus-hint-desc').innerHTML = "What's this Pokémon's name?<br><small>One attempt — or close to try later.</small>";
+
+    } catch (e) {
+      console.error(e);
+      $('bonus-hint-desc').innerHTML = 'Failed to load. Close and try again.';
+    }
+  }
+
+  function handleBonusAnswer(clickedBtn, correct, choicesEl) {
+    // Mark as used — no more quiz this game
+    GS.bonusHintUsed = true;
+    updateHintButton();
+
+    // Disable all, mark clicked, reveal correct answer
+    choicesEl.querySelectorAll('.bonus-choice-name').forEach(b => {
+      b.disabled = true;
+      if (b.dataset.correct === 'true') b.classList.add('correct');
+    });
+    if (!correct) clickedBtn.classList.add('wrong');
+
+    // Reveal silhouette → actual image
+    const img = $('bonus-hint-pokemon').querySelector('img');
+    if (img) img.classList.add('revealed');
+
+    const desc = $('bonus-hint-desc');
+    if (correct) {
+      desc.innerHTML = '🎉 Correct! You earned 3 hints!';
+      GS.hintsLeft = 3;
+      updateStats();
+    } else {
+      desc.innerHTML = '❌ Wrong! No extra hints this time.';
+    }
+
+  }
+
   // ── Hint ──────────────────────────────────────────────────
   function doHint() {
-    if (GS.hintsLeft <= 0 || GS.gameOver || GS.gameWon) return;
+    if (GS.gameOver || GS.gameWon || GS.paused) return;
+    if (GS.hintsLeft <= 0) {
+      if (!GS.bonusHintUsed) showBonusHintQuiz();
+      return;
+    }
     const empties = [];
     for (let i = 0; i < 81; i++) {
       if (GS.puzzle[i] === 0 && GS.board[i] !== GS.solution[i]) empties.push(i);
@@ -476,6 +597,7 @@
     GS.paused = false;
     GS.gameOver = false;
     GS.gameWon = false;
+    GS.bonusHintUsed = false;
     notesBtn.classList.remove('active');
     updateStats();
 
@@ -787,6 +909,8 @@
 
   $('pause-btn').addEventListener('click', togglePause);
   $('resume-btn').addEventListener('click', togglePause);
+
+  $('bonus-hint-close').addEventListener('click', () => $('bonus-hint-modal').classList.add('hidden'));
 
   $('records-btn').addEventListener('click', showLeaderboard);
   $('leaderboard-close').addEventListener('click', () => $('leaderboard-modal').classList.add('hidden'));

@@ -646,6 +646,26 @@ main {
 /* ===== Leaderboard Modal ===== */
 .leaderboard-content { max-width: 380px; }
 
+#lb-tabs {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+  margin-bottom: 4px;
+}
+.lb-tab {
+  flex: 1;
+  padding: 6px 0;
+  border: 2px solid #3355aa;
+  border-radius: 20px;
+  background: transparent;
+  color: #3355aa;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.lb-tab.active, .lb-tab:hover { background: #3355aa; color: white; }
+
 #leaderboard-list { margin: 12px 0; text-align: left; min-height: 60px; }
 
 .lb-loading { text-align: center; color: #999; padding: 20px 0; }

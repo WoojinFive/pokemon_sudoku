@@ -580,15 +580,22 @@
   }
 
   // ── Leaderboard ───────────────────────────────────────────
-  async function showLeaderboard() {
+  async function showLeaderboard(diff) {
     const modal = $('leaderboard-modal');
     const list = $('leaderboard-list');
+    diff = diff || 'easy';
+
+    // Activate correct tab
+    modal.querySelectorAll('.lb-tab').forEach(t =>
+      t.classList.toggle('active', t.dataset.diff === diff)
+    );
+
     modal.classList.remove('hidden');
     list.innerHTML = '<p class="lb-loading">Loading...</p>';
     try {
       const lb = window.FirebaseLeaderboard;
       if (!lb) { list.innerHTML = '<p class="lb-loading">Leaderboard unavailable.</p>'; return; }
-      const scores = await lb.getTopScores();
+      const scores = await lb.getTopScores(diff);
       if (scores.length === 0) {
         list.innerHTML = '<p class="lb-loading">No records yet!</p>';
         return;
@@ -599,11 +606,9 @@
         const medal = idx < 3
           ? `<span class="leaderboard-medal">${medals[idx]}</span>`
           : `<span class="leaderboard-rank">${idx + 1}</span>`;
-        const diffLabel = { easy: 'Easy', medium: 'Med', hard: 'Hard' }[s.difficulty] || s.difficulty || '';
         return `<div class="leaderboard-row${rankClass}">
           ${medal}
           <span class="leaderboard-name">${escapeHtml(s.name)}</span>
-          <span class="leaderboard-diff ${s.difficulty || ''}">${diffLabel}</span>
           <span class="leaderboard-time">${formatTime(s.time)}</span>
         </div>`;
       }).join('');
@@ -641,7 +646,7 @@
     const lb = window.FirebaseLeaderboard;
     if (lb) {
       try {
-        qualifies = await lb.qualifiesForTop10(elapsed);
+        qualifies = await lb.qualifiesForTop10(elapsed, GS.difficulty);
       } catch (e) {
         console.error('Leaderboard check failed:', e);
         qualifies = true; // fail open: show input on error
@@ -1003,8 +1008,11 @@
   $('name-quiz-close').addEventListener('click', () => $('name-quiz-modal').classList.add('hidden'));
   $('name-quiz-next').addEventListener('click', loadNQRound);
 
-  $('records-btn').addEventListener('click', showLeaderboard);
+  $('records-btn').addEventListener('click', () => showLeaderboard('easy'));
   $('leaderboard-close').addEventListener('click', () => $('leaderboard-modal').classList.add('hidden'));
+  document.querySelectorAll('.lb-tab').forEach(tab => {
+    tab.addEventListener('click', () => showLeaderboard(tab.dataset.diff));
+  });
 
   $('save-record-btn').addEventListener('click', async () => {
     const btn = $('save-record-btn');

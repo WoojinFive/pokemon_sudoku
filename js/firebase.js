@@ -16,9 +16,14 @@
   const db = firebase.firestore();
   const COL = 'sudoku_leaderboard';
 
-  async function getTopScores() {
-    const snap = await db.collection(COL).orderBy('time', 'asc').limit(10).get();
-    return snap.docs.map(d => d.data());
+  async function getTopScores(difficulty) {
+    const snap = await db.collection(COL)
+      .where('difficulty', '==', difficulty || 'easy')
+      .get();
+    return snap.docs
+      .map(d => d.data())
+      .sort((a, b) => a.time - b.time)
+      .slice(0, 10);
   }
 
   async function addScore(name, timeSeconds, difficulty) {
@@ -30,8 +35,8 @@
     });
   }
 
-  async function qualifiesForTop10(timeSeconds) {
-    const scores = await getTopScores();
+  async function qualifiesForTop10(timeSeconds, difficulty) {
+    const scores = await getTopScores(difficulty);
     if (scores.length < 10) return true;
     return timeSeconds < scores[scores.length - 1].time;
   }

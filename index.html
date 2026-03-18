@@ -89,13 +89,23 @@
   <!-- Pokemon Name Quiz Modal -->
   <div id="name-quiz-modal" class="modal hidden">
     <div class="modal-content name-quiz-content">
-      <button id="name-quiz-close" title="Close">✕</button>
-      <h2>Who's that Pokémon?</h2>
-      <div id="name-quiz-score">⭕ <span id="nq-correct">0</span> &nbsp; ❌ <span id="nq-wrong">0</span></div>
-      <div id="name-quiz-pokemon"></div>
+      <div class="nq-header">
+        <h2>Who's that Pokémon?</h2>
+        <button id="name-quiz-close" title="Close">✕</button>
+      </div>
+      <div class="nq-controls">
+        <div id="name-quiz-score">⭕ <span id="nq-correct">0</span> &nbsp; ❌ <span id="nq-wrong">0</span></div>
+        <div id="nq-lang-toggle">
+          <button class="nq-lang-btn active" data-lang="en">EN</button>
+          <button class="nq-lang-btn" data-lang="ko">한국어</button>
+        </div>
+      </div>
+      <div class="nq-pokemon-row">
+        <div id="name-quiz-pokemon"></div>
+        <button id="name-quiz-next">→</button>
+      </div>
       <p id="name-quiz-desc"></p>
       <div id="name-quiz-choices"></div>
-      <button id="name-quiz-next" class="hidden">Next →</button>
     </div>
   </div>
 

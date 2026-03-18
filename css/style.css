@@ -519,12 +519,19 @@ main {
 #name-quiz-btn:hover { background: #6c3483; }
 
 /* ===== Pokemon Name Quiz Modal ===== */
-.name-quiz-content { max-width: 320px; position: relative; padding: 28px 24px 24px; }
+.name-quiz-content { max-width: 320px; padding: 20px 24px 24px; }
+
+.nq-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+  gap: 8px;
+}
+.nq-header h2 { margin: 0; font-size: 1.2rem; }
 
 #name-quiz-close {
-  position: absolute;
-  top: 10px;
-  right: 12px;
+  flex-shrink: 0;
   width: 28px;
   height: 28px;
   border-radius: 50%;
@@ -540,17 +547,39 @@ main {
 }
 #name-quiz-close:hover { background: #888; }
 
-#name-quiz-score {
-  font-size: 1rem;
-  font-weight: 700;
+.nq-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   margin-bottom: 12px;
-  color: #333;
+}
+
+#name-quiz-score { font-size: 0.95rem; font-weight: 700; color: #333; }
+
+#nq-lang-toggle { display: flex; gap: 4px; }
+.nq-lang-btn {
+  padding: 3px 10px;
+  border: 2px solid #8e44ad;
+  border-radius: 14px;
+  background: transparent;
+  color: #8e44ad;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.nq-lang-btn.active, .nq-lang-btn:hover { background: #8e44ad; color: white; }
+
+.nq-pokemon-row {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  margin-bottom: 12px;
 }
 
 #name-quiz-pokemon {
-  width: 130px;
-  height: 130px;
-  margin: 0 auto 12px;
+  width: 120px;
+  height: 120px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -563,11 +592,35 @@ main {
 }
 #name-quiz-pokemon img.revealed { filter: none; }
 
+#name-quiz-next {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  padding: 8px 14px;
+  border-radius: 20px;
+  border: 2px solid #8e44ad;
+  background: #8e44ad;
+  color: white;
+  font-size: 0.88rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s;
+  visibility: hidden;
+  white-space: nowrap;
+}
+#name-quiz-next.visible { visibility: visible; }
+#name-quiz-next:hover { background: #6c3483; border-color: #6c3483; }
+
 #name-quiz-desc {
   font-size: 0.85rem;
   color: #555;
   margin-bottom: 10px;
-  min-height: 1.2em;
+  height: 2.6em;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
 }
 
 #name-quiz-choices {
@@ -577,20 +630,12 @@ main {
   width: 100%;
 }
 
-#name-quiz-next {
-  margin-top: 14px;
-  width: 100%;
-  padding: 10px;
-  background: #8e44ad;
-  color: white;
-  border: none;
-  border-radius: 10px;
-  font-size: 0.95rem;
-  font-weight: 700;
-  cursor: pointer;
-  transition: background 0.15s;
+/* Disable hover effects on touch devices (prevents sticky hover) */
+@media (hover: none) {
+  .bonus-choice-name:hover:not(:disabled),
+  .nq-lang-btn:hover { background: transparent; color: #8e44ad; border-color: inherit; }
+  .nq-lang-btn.active:hover { background: #8e44ad; color: white; }
 }
-#name-quiz-next:hover { background: #6c3483; }
 
 /* ===== Records Button ===== */
 #records-btn {

@@ -367,11 +367,19 @@
     return arr;
   }
 
-  async function fetchPokemonName(id) {
-    const res = await fetch(`https://pokeapi.co/api/v2/pokemon/${id}`);
-    if (!res.ok) throw new Error(`Pokemon ${id} not found`);
-    const data = await res.json();
-    return data.name; // e.g. "bulbasaur"
+  async function fetchPokemonName(id, lang = 'en') {
+    if (lang === 'ko') {
+      const res = await fetch(`https://pokeapi.co/api/v2/pokemon-species/${id}`);
+      if (!res.ok) throw new Error(`Species ${id} not found`);
+      const data = await res.json();
+      const entry = data.names.find(n => n.language.name === 'ko');
+      return entry ? entry.name : data.name;
+    } else {
+      const res = await fetch(`https://pokeapi.co/api/v2/pokemon/${id}`);
+      if (!res.ok) throw new Error(`Pokemon ${id} not found`);
+      const data = await res.json();
+      return data.name;
+    }
   }
 
   function capitalize(str) {
@@ -461,15 +469,13 @@
   }
 
   // ── Pokemon Name Quiz (standalone) ────────────────────────
-  const NQ = { correct: 0, wrong: 0 };
+  const NQ = { correct: 0, wrong: 0, lang: 'en', answerID: null, wrongIDs: [] };
 
   function openNameQuiz() {
     NQ.correct = 0;
     NQ.wrong = 0;
     updateNQScore();
-    $('name-quiz-next').classList.add('hidden');
     $('name-quiz-choices').innerHTML = '';
-    $('name-quiz-pokemon').innerHTML = '';
     $('name-quiz-desc').textContent = '';
     $('name-quiz-modal').classList.remove('hidden');
     loadNQRound();
@@ -480,50 +486,62 @@
     $('nq-wrong').textContent = NQ.wrong;
   }
 
+  function updateNQNextLabel() {
+    $('name-quiz-next').textContent = NQ.lang === 'ko' ? '다음' : 'Next';
+  }
+
+  // New round: pick new Pokemon IDs then render
   async function loadNQRound() {
-    $('name-quiz-next').classList.add('hidden');
+    NQ.answerID = randInt(1025) + 1;
+    NQ.wrongIDs = [];
+    const used = new Set([NQ.answerID]);
+    while (NQ.wrongIDs.length < 3) {
+      const id = randInt(1025) + 1;
+      if (!used.has(id)) { used.add(id); NQ.wrongIDs.push(id); }
+    }
+
+    // Render image fresh
+    $('name-quiz-pokemon').innerHTML = '';
+    const img = document.createElement('img');
+    img.src = `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${NQ.answerID}.png`;
+    img.onerror = () => { img.src = `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${NQ.answerID}.png`; };
+    $('name-quiz-pokemon').appendChild(img);
+
+    await renderNQChoices();
+  }
+
+  // Render choices only (reuse current Pokemon IDs) — called on round load or lang switch
+  async function renderNQChoices() {
+    const nextBtn = $('name-quiz-next');
+    nextBtn.classList.remove('visible');
+    updateNQNextLabel();
     $('name-quiz-choices').innerHTML = '';
     $('name-quiz-desc').textContent = 'Loading...';
 
-    const answerID = randInt(1025) + 1;
-    const wrongIDs = new Set();
-    while (wrongIDs.size < 3) {
-      const id = randInt(1025) + 1;
-      if (id !== answerID) wrongIDs.add(id);
-    }
-
     try {
-      const names = await Promise.all([answerID, ...[...wrongIDs]].map(fetchPokemonName));
-      const answerName = names[0];
+      const lang = NQ.lang;
+      const ids = [NQ.answerID, ...NQ.wrongIDs];
+      const names = await Promise.all(ids.map(id => fetchPokemonName(id, lang)));
       const choices = shuffleArr(names.map((name, i) => ({ name, correct: i === 0 })));
 
-      // Silhouette image
-      const pokemonEl = $('name-quiz-pokemon');
-      pokemonEl.innerHTML = '';
-      const img = document.createElement('img');
-      img.src = `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${answerID}.png`;
-      img.onerror = () => { img.src = `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${answerID}.png`; };
-      img.alt = answerName;
-      pokemonEl.appendChild(img);
-
-      // Choice buttons (reuse .bonus-choice-name style)
+      const img = $('name-quiz-pokemon').querySelector('img');
       const choicesEl = $('name-quiz-choices');
       choicesEl.innerHTML = '';
       choices.forEach(({ name, correct }) => {
         const btn = document.createElement('button');
         btn.className = 'bonus-choice-name';
-        btn.textContent = capitalize(name);
+        btn.textContent = lang === 'en' ? capitalize(name) : name;
         btn.dataset.correct = correct ? 'true' : 'false';
         btn.addEventListener('click', () => handleNQAnswer(btn, correct, choicesEl, img));
         choicesEl.appendChild(btn);
       });
 
-      $('name-quiz-desc').textContent = "What's this Pokémon's name?";
+      $('name-quiz-desc').textContent = lang === 'ko' ? '이 포켓몬의 이름은?' : "What's this Pokémon's name?";
 
     } catch (e) {
       console.error(e);
-      $('name-quiz-desc').textContent = 'Failed to load. Try next.';
-      $('name-quiz-next').classList.remove('hidden');
+      $('name-quiz-desc').textContent = 'Failed to load.';
+      $('name-quiz-next').classList.add('visible');
     }
   }
 
@@ -533,18 +551,17 @@
       if (b.dataset.correct === 'true') b.classList.add('correct');
     });
     if (!correct) clickedBtn.classList.add('wrong');
-
     if (img) img.classList.add('revealed');
 
     if (correct) {
       NQ.correct++;
-      $('name-quiz-desc').textContent = '🎉 Correct!';
+      $('name-quiz-desc').textContent = '🎉 ' + (NQ.lang === 'ko' ? '정답!' : 'Correct!');
     } else {
       NQ.wrong++;
-      $('name-quiz-desc').textContent = '❌ Wrong!';
+      $('name-quiz-desc').textContent = '❌ ' + (NQ.lang === 'ko' ? '틀렸습니다!' : 'Wrong!');
     }
     updateNQScore();
-    $('name-quiz-next').classList.remove('hidden');
+    $('name-quiz-next').classList.add('visible');
   }
 
   // ── Hint ──────────────────────────────────────────────────
@@ -1007,6 +1024,14 @@
   $('name-quiz-btn').addEventListener('click', openNameQuiz);
   $('name-quiz-close').addEventListener('click', () => $('name-quiz-modal').classList.add('hidden'));
   $('name-quiz-next').addEventListener('click', loadNQRound);
+  document.querySelectorAll('.nq-lang-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (NQ.lang === btn.dataset.lang) return;
+      NQ.lang = btn.dataset.lang;
+      document.querySelectorAll('.nq-lang-btn').forEach(b => b.classList.toggle('active', b === btn));
+      if (NQ.answerID) renderNQChoices(); else updateNQNextLabel();
+    });
+  });
 
   $('records-btn').addEventListener('click', () => showLeaderboard('easy'));
   $('leaderboard-close').addEventListener('click', () => $('leaderboard-modal').classList.add('hidden'));

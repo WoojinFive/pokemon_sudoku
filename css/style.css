@@ -874,7 +874,7 @@ main {
   border-radius: 8px;
   border: 1px solid #ddd;
 }
-#cg-color-canvas { cursor: crosshair; }
+#cg-color-canvas { cursor: crosshair; /* overridden by JS brush cursor */ }
 #cg-outline-canvas { pointer-events: none; }
 
 .cg-canvas-wrap.cg-loading canvas { opacity: 0.4; cursor: wait; }
@@ -940,6 +940,200 @@ main {
   color: white;
 }
 #cg-next-btn:hover { background: #2244aa; }
+
+/* ===== Fill by Color Button ===== */
+#fill-color-btn {
+  padding: 6px 12px;
+  background: #27ae60;
+  color: white;
+  border: none;
+  border-radius: 20px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+  white-space: nowrap;
+}
+#fill-color-btn:hover { background: #1e8449; }
+
+/* ===== Fill by Color Modal ===== */
+.fbc-content {
+  max-width: 90vw;
+  width: 340px;
+  padding: 16px 16px 18px;
+  text-align: left;
+  overflow: hidden;
+}
+@media (min-width: 600px) { .fbc-content { width: 520px; } }
+@media (min-width: 900px) { .fbc-content { width: 640px; } }
+
+.fbc-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  gap: 8px;
+}
+.fbc-header h2 { margin: 0; font-size: 1.2rem; }
+
+#fbc-close {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: none;
+  background: #aaa;
+  color: white;
+  font-size: 0.8rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+#fbc-close:hover { background: #888; }
+
+.fbc-top-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 10px;
+  min-width: 0;
+}
+
+.fbc-ref-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex-shrink: 0;
+}
+#fbc-pokemon-name {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #888;
+  margin: 0 0 3px;
+  text-align: center;
+}
+#fbc-ref-img {
+  width: 120px;
+  height: 120px;
+  object-fit: contain;
+  border: 1px solid #eee;
+  border-radius: 6px;
+  background: #fafafa;
+}
+
+#fbc-palette {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  flex: 1;
+  min-width: 0;
+  justify-content: flex-start;
+  align-content: flex-start;
+}
+
+.modal-content button.fbc-swatch {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: border-color 0.12s, outline 0.12s, opacity 0.2s;
+  padding: 0;
+  box-sizing: border-box;
+  flex-shrink: 0;
+  margin-top: 0;
+  font-size: 0;
+  line-height: 0;
+  position: relative;
+}
+.modal-content button.fbc-swatch:hover { outline: 1.5px solid #27ae60; outline-offset: 0px; }
+.modal-content button.fbc-swatch.selected { border-color: #27ae60; outline: 2px solid #27ae60; outline-offset: 0px; }
+.fbc-canvas-wrap {
+  position: relative;
+  width: 100%;
+  max-width: 100%;
+  aspect-ratio: 1;
+  margin: 0 auto 8px;
+  touch-action: none;
+}
+.fbc-canvas-wrap canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  max-width: 100%;
+  border-radius: 8px;
+  border: 1px solid #ddd;
+}
+#fbc-color-canvas { cursor: crosshair; /* overridden by JS brush cursor */ }
+#fbc-outline-canvas { pointer-events: none; }
+
+.fbc-canvas-wrap.fbc-loading canvas { opacity: 0.4; cursor: wait; }
+
+#fbc-brush-sizes {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+  margin-bottom: 8px;
+  flex-wrap: nowrap;
+}
+.modal-content .fbc-brush-btn {
+  padding: 10px 10px;
+  border: 2px solid #27ae60;
+  border-radius: 16px;
+  background: white;
+  color: #27ae60;
+  font-size: 0.8rem;
+  margin-top: 0;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.12s, background 0.12s, color 0.12s;
+}
+.fbc-brush-btn.active, .fbc-brush-btn:hover {
+  border-color: #27ae60;
+  background: #27ae60;
+  color: white;
+}
+#fbc-eraser-btn {
+  border-color: #888;
+  color: #888;
+}
+#fbc-eraser-btn.active, #fbc-eraser-btn:hover {
+  border-color: #555;
+  background: #555;
+  color: white;
+}
+
+.fbc-btn-row {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+}
+.fbc-btn-row button {
+  padding: 4px 10px;
+  border-radius: 16px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  border: 2px solid #3355aa;
+}
+#fbc-clear-btn, #fbc-undo-btn {
+  background: white;
+  color: #3355aa;
+}
+#fbc-clear-btn:hover, #fbc-undo-btn:hover {
+  background: #3355aa;
+  color: white;
+}
+#fbc-next-btn {
+  background: #3355aa;
+  color: white;
+}
+#fbc-next-btn:hover { background: #2244aa; }
 
 /* ===== Responsive ===== */
 @media (max-width: 420px) {

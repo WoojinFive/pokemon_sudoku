@@ -1048,6 +1048,7 @@
     CG.history = [];
     renderCGPalette();
     loadCGRound();
+    updateBrushCursor(colorCanvas, CG.brushSize, CG.canvasSize);
   }
 
   function renderCGPalette() {
@@ -1115,115 +1116,101 @@
     CG.busy = false;
   }
 
-  function processImageToOutline(id) {
-    function applyOutline(img) {
-      const SIZE = CG.canvasSize || 280;
-      const PAD = 12;
+  // Shared outline generator — returns { srcImageData } for optional further use (FBC)
+  function applyOutline(img, outlineCtx, colorCtx, SIZE) {
+    const PAD = 12;
+    const off = document.createElement('canvas');
+    off.width = SIZE;
+    off.height = SIZE;
+    const ctx = off.getContext('2d');
 
-      // Draw onto offscreen canvas with transparent background
-      const off = document.createElement('canvas');
-      off.width = SIZE;
-      off.height = SIZE;
-      const ctx = off.getContext('2d');
+    const scale = Math.min((SIZE - PAD * 2) / img.width, (SIZE - PAD * 2) / img.height);
+    const dw = img.width * scale;
+    const dh = img.height * scale;
+    const dx = (SIZE - dw) / 2;
+    const dy = (SIZE - dh) / 2;
+    ctx.drawImage(img, dx, dy, dw, dh);
 
-      const scale = Math.min((SIZE - PAD * 2) / img.width, (SIZE - PAD * 2) / img.height);
-      const dw = img.width * scale;
-      const dh = img.height * scale;
-      const dx = (SIZE - dw) / 2;
-      const dy = (SIZE - dh) / 2;
-      ctx.drawImage(img, dx, dy, dw, dh);
+    const src = ctx.getImageData(0, 0, SIZE, SIZE);
+    const s = src.data;
+    const dst = ctx.createImageData(SIZE, SIZE);
+    const d = dst.data;
+    const N = SIZE * SIZE;
 
-      const src = ctx.getImageData(0, 0, SIZE, SIZE);
-      const s = src.data;
-      const dst = ctx.createImageData(SIZE, SIZE);
-      const d = dst.data;
-      const N = SIZE * SIZE;
+    const EDGE_THRESH = 48;
+    const edge = new Uint8Array(N);
+    const dirs4dx = [1, 0, -1, 0];
+    const dirs4dy = [0, 1, 0, -1];
 
-      // ── Color-distance edge detection (optimized for pixel-art sprites) ──
-      // No blur, no Sobel — direct RGB distance to 4-connected neighbors only.
-      // 4-connected avoids catching diagonal anti-aliasing artifacts.
-
-      const EDGE_THRESH = 48;   // RGB distance — high enough to skip anti-aliasing, low enough for real edges
-      const edge = new Uint8Array(N);
-      const dirs4dx = [1, 0, -1, 0];
-      const dirs4dy = [0, 1, 0, -1];
-
-      for (let y = 0; y < SIZE; y++) {
-        for (let x = 0; x < SIZE; x++) {
-          const idx = y * SIZE + x;
-          const a0 = s[idx * 4 + 3];
-          if (a0 < 10) continue;
-
-          const r0 = s[idx * 4], g0 = s[idx * 4 + 1], b0 = s[idx * 4 + 2];
-
-          // Alpha boundary check (8-dir for clean silhouette)
-          let isAlpha = false;
-          for (let dd = 0; dd < 4; dd++) {
-            const nx = x + dirs4dx[dd], ny = y + dirs4dy[dd];
-            if (nx < 0 || nx >= SIZE || ny < 0 || ny >= SIZE ||
-                s[(ny * SIZE + nx) * 4 + 3] < 10) {
-              isAlpha = true; break;
-            }
-          }
-          if (isAlpha) { edge[idx] = 1; continue; }
-
-          // Color distance check (4-connected only → thin 1px lines)
-          for (let dd = 0; dd < 4; dd++) {
-            const nx = x + dirs4dx[dd], ny = y + dirs4dy[dd];
-            if (nx < 0 || nx >= SIZE || ny < 0 || ny >= SIZE) continue;
-            const ni = ny * SIZE + nx;
-            if (s[ni * 4 + 3] < 10) continue;
-            const dr = r0 - s[ni * 4];
-            const dg = g0 - s[ni * 4 + 1];
-            const db = b0 - s[ni * 4 + 2];
-            const dist = Math.sqrt(dr * dr + dg * dg + db * db);
-            if (dist > EDGE_THRESH) { edge[idx] = 1; break; }
+    for (let y = 0; y < SIZE; y++) {
+      for (let x = 0; x < SIZE; x++) {
+        const idx = y * SIZE + x;
+        const a0 = s[idx * 4 + 3];
+        if (a0 < 10) continue;
+        const r0 = s[idx * 4], g0 = s[idx * 4 + 1], b0 = s[idx * 4 + 2];
+        let isAlpha = false;
+        for (let dd = 0; dd < 4; dd++) {
+          const nx = x + dirs4dx[dd], ny = y + dirs4dy[dd];
+          if (nx < 0 || nx >= SIZE || ny < 0 || ny >= SIZE ||
+              s[(ny * SIZE + nx) * 4 + 3] < 10) {
+            isAlpha = true; break;
           }
         }
-      }
-
-      // Remove isolated noise: edge pixel with 0 edge neighbors → remove
-      const dirs8 = [-SIZE - 1, -SIZE, -SIZE + 1, -1, 1, SIZE - 1, SIZE, SIZE + 1];
-      const clean = new Uint8Array(N);
-      for (let i = 0; i < N; i++) {
-        if (!edge[i]) continue;
-        let neighbors = 0;
-        for (let di = 0; di < 8; di++) {
-          const ni = i + dirs8[di];
-          if (ni >= 0 && ni < N && edge[ni]) neighbors++;
-        }
-        clean[i] = (neighbors >= 1) ? 1 : 0;
-      }
-
-      // Render clean edges as black pixels (thin 1px lines)
-      for (let i = 0; i < N; i++) {
-        if (clean[i]) {
-          d[i * 4] = 0; d[i * 4 + 1] = 0; d[i * 4 + 2] = 0; d[i * 4 + 3] = 255;
+        if (isAlpha) { edge[idx] = 1; continue; }
+        for (let dd = 0; dd < 4; dd++) {
+          const nx = x + dirs4dx[dd], ny = y + dirs4dy[dd];
+          if (nx < 0 || nx >= SIZE || ny < 0 || ny >= SIZE) continue;
+          const ni = ny * SIZE + nx;
+          if (s[ni * 4 + 3] < 10) continue;
+          const dr = r0 - s[ni * 4];
+          const dg = g0 - s[ni * 4 + 1];
+          const db = b0 - s[ni * 4 + 2];
+          const dist = Math.sqrt(dr * dr + dg * dg + db * db);
+          if (dist > EDGE_THRESH) { edge[idx] = 1; break; }
         }
       }
-
-      // Write outline canvas (transparent bg + black lines)
-      CG.outlineCtx.clearRect(0, 0, SIZE, SIZE);
-      CG.outlineCtx.putImageData(dst, 0, 0);
-
-      // White background on color canvas
-      CG.colorCtx.fillStyle = 'white';
-      CG.colorCtx.fillRect(0, 0, SIZE, SIZE);
     }
 
+    const dirs8 = [-SIZE - 1, -SIZE, -SIZE + 1, -1, 1, SIZE - 1, SIZE, SIZE + 1];
+    const clean = new Uint8Array(N);
+    for (let i = 0; i < N; i++) {
+      if (!edge[i]) continue;
+      let neighbors = 0;
+      for (let di = 0; di < 8; di++) {
+        const ni = i + dirs8[di];
+        if (ni >= 0 && ni < N && edge[ni]) neighbors++;
+      }
+      clean[i] = (neighbors >= 1) ? 1 : 0;
+    }
+
+    for (let i = 0; i < N; i++) {
+      if (clean[i]) {
+        d[i * 4] = 0; d[i * 4 + 1] = 0; d[i * 4 + 2] = 0; d[i * 4 + 3] = 255;
+      }
+    }
+
+    outlineCtx.clearRect(0, 0, SIZE, SIZE);
+    outlineCtx.putImageData(dst, 0, 0);
+
+    colorCtx.fillStyle = 'white';
+    colorCtx.fillRect(0, 0, SIZE, SIZE);
+
+    return { srcImageData: src };
+  }
+
+  function processImageToOutline(id) {
     return new Promise((resolve, reject) => {
       const img = new Image();
       img.crossOrigin = 'anonymous';
       img.onload = () => {
-        applyOutline(img);
+        applyOutline(img, CG.outlineCtx, CG.colorCtx, CG.canvasSize || 280);
         resolve();
       };
       img.onerror = () => {
-        // Fallback to default sprite
         const fallback = new Image();
         fallback.crossOrigin = 'anonymous';
         fallback.onload = () => {
-          applyOutline(fallback);
+          applyOutline(fallback, CG.outlineCtx, CG.colorCtx, CG.canvasSize || 280);
           resolve();
         };
         fallback.onerror = reject;
@@ -1231,6 +1218,19 @@
       };
       img.src = `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${id}.png`;
     });
+  }
+
+  // ── Custom brush cursor (shared by CG & FBC) ──
+  function updateBrushCursor(canvas, brushSize, canvasSize) {
+    const rect = canvas.getBoundingClientRect();
+    const displayScale = rect.width / canvasSize;
+    const diameter = Math.max(4, Math.round(brushSize * 2 * displayScale));
+    const r = diameter / 2;
+    const size = diameter + 2; // +2 for stroke
+    const half = size / 2;
+    const svgCircle = `<svg xmlns='http://www.w3.org/2000/svg' width='${size}' height='${size}'><circle cx='${half}' cy='${half}' r='${r}' fill='none' stroke='black' stroke-width='1'/><circle cx='${half}' cy='${half}' r='${r}' fill='none' stroke='white' stroke-width='0.5'/></svg>`;
+    const encoded = 'data:image/svg+xml;base64,' + btoa(svgCircle);
+    canvas.style.cursor = `url("${encoded}") ${half} ${half}, crosshair`;
   }
 
   function getCGCoords(e) {
@@ -1325,6 +1325,7 @@
         CG.brushSize = parseInt(btn.dataset.size);
       }
       document.querySelectorAll('.cg-brush-btn').forEach(b => b.classList.toggle('active', b === btn));
+      updateBrushCursor($('cg-color-canvas'), CG.brushSize, CG.canvasSize);
     });
   });
 
@@ -1333,6 +1334,403 @@
   $('cg-next-btn').addEventListener('click', loadCGRound);
   $('cg-clear-btn').addEventListener('click', clearCanvas);
   $('cg-undo-btn').addEventListener('click', undoCG);
+
+  // ── Fill by Color Game ─────────────────────────────────────
+  const FBC = {
+    pokemonID: null,
+    canvasSize: 280,
+    colorCtx: null,
+    outlineCtx: null,
+    painting: false,
+    busy: false,
+    lastX: 0, lastY: 0,
+    brushSize: 7,
+    erasing: false,
+    selectedColorIdx: -1,
+    quantizedPalette: [],
+    colorMap: null,
+    filledMask: null,
+    canvasImageData: null,
+    history: [],
+  };
+  const FBC_MAX_HISTORY = 20;
+
+  function openFBCGame() {
+    $('fbc-modal').classList.remove('hidden');
+    const wrap = document.querySelector('.fbc-canvas-wrap');
+    const displaySize = Math.round(wrap.clientWidth);
+    const res = Math.max(280, displaySize);
+    const colorCanvas = $('fbc-color-canvas');
+    const outlineCanvas = $('fbc-outline-canvas');
+    colorCanvas.width = res;
+    colorCanvas.height = res;
+    outlineCanvas.width = res;
+    outlineCanvas.height = res;
+    FBC.canvasSize = res;
+    FBC.colorCtx = colorCanvas.getContext('2d');
+    FBC.outlineCtx = outlineCanvas.getContext('2d');
+    FBC.history = [];
+    loadFBCRound();
+    updateBrushCursor(colorCanvas, FBC.brushSize, FBC.canvasSize);
+  }
+
+  async function loadFBCRound() {
+    if (FBC.busy) return;
+    FBC.busy = true;
+    FBC.history = [];
+    FBC.selectedColorIdx = -1;
+    FBC.erasing = false;
+
+    const wrap = document.querySelector('.fbc-canvas-wrap');
+    wrap.classList.add('fbc-loading');
+
+    const id = Math.floor(Math.random() * 1025) + 1;
+    FBC.pokemonID = id;
+    $('fbc-pokemon-name').textContent = '...';
+
+    const refImg = $('fbc-ref-img');
+    refImg.src = `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${id}.png`;
+    refImg.onerror = () => {
+      refImg.src = `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${id}.png`;
+    };
+
+    try {
+      await processFBCImage(id);
+    } catch (e) {
+      console.error('FBC image processing failed:', e);
+    }
+
+    fetchPokemonName(id, 'en').then(name => {
+      $('fbc-pokemon-name').textContent = name ? name.charAt(0).toUpperCase() + name.slice(1) : `#${id}`;
+    }).catch(() => {
+      $('fbc-pokemon-name').textContent = `#${id}`;
+    });
+
+    wrap.classList.remove('fbc-loading');
+    FBC.busy = false;
+  }
+
+  function processFBCImage(id) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => { finishFBCProcess(img); resolve(); };
+      img.onerror = () => {
+        const fallback = new Image();
+        fallback.crossOrigin = 'anonymous';
+        fallback.onload = () => { finishFBCProcess(fallback); resolve(); };
+        fallback.onerror = reject;
+        fallback.src = `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${id}.png`;
+      };
+      img.src = `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${id}.png`;
+    });
+  }
+
+  function finishFBCProcess(img) {
+    const SIZE = FBC.canvasSize;
+    const { srcImageData } = applyOutline(img, FBC.outlineCtx, FBC.colorCtx, SIZE);
+    const palette = medianCut(srcImageData, 20);
+    const merged = mergeSimilarColors(palette, 25);
+    FBC.quantizedPalette = merged;
+    const { colorMap } = buildColorMap(srcImageData, merged, SIZE);
+    FBC.colorMap = colorMap;
+    FBC.filledMask = new Uint8Array(SIZE * SIZE);
+    FBC.canvasImageData = FBC.colorCtx.getImageData(0, 0, SIZE, SIZE);
+    renderFBCPalette();
+  }
+
+  // ── Median Cut Color Quantization ──
+  function medianCut(imageData, targetCount) {
+    const s = imageData.data;
+    const N = imageData.width * imageData.height;
+    const pixels = [];
+    for (let i = 0; i < N; i++) {
+      if (s[i * 4 + 3] > 20) {
+        const pr = s[i * 4], pg = s[i * 4 + 1], pb = s[i * 4 + 2];
+        // Exclude near-black (outline edges) and near-white from quantization
+        if (pr < 30 && pg < 30 && pb < 30) continue;
+        if (pr > 230 && pg > 230 && pb > 230) continue;
+        pixels.push([pr, pg, pb]);
+      }
+    }
+    if (pixels.length === 0) return [{ r: 128, g: 128, b: 128, hex: '#808080' }];
+
+    let buckets = [pixels];
+    while (buckets.length < targetCount) {
+      // Find bucket with largest range
+      let bestIdx = 0, bestRange = -1, bestChannel = 0;
+      for (let bi = 0; bi < buckets.length; bi++) {
+        const b = buckets[bi];
+        if (b.length < 2) continue;
+        for (let ch = 0; ch < 3; ch++) {
+          let mn = 255, mx = 0;
+          for (let pi = 0; pi < b.length; pi++) {
+            if (b[pi][ch] < mn) mn = b[pi][ch];
+            if (b[pi][ch] > mx) mx = b[pi][ch];
+          }
+          const range = mx - mn;
+          if (range > bestRange) { bestRange = range; bestIdx = bi; bestChannel = ch; }
+        }
+      }
+      if (bestRange <= 0) break;
+      const bucket = buckets[bestIdx];
+      bucket.sort((a, b) => a[bestChannel] - b[bestChannel]);
+      const mid = Math.floor(bucket.length / 2);
+      buckets.splice(bestIdx, 1, bucket.slice(0, mid), bucket.slice(mid));
+    }
+
+    return buckets.map(b => {
+      // Use median pixel (after sorting by luminance) for more representative color
+      b.sort((a, c) => (a[0] * 299 + a[1] * 587 + a[2] * 114) - (c[0] * 299 + c[1] * 587 + c[2] * 114));
+      const mid = b[Math.floor(b.length / 2)];
+      const r = mid[0], g = mid[1], bl = mid[2];
+      return { r, g, b: bl, hex: '#' + ((1 << 24) + (r << 16) + (g << 8) + bl).toString(16).slice(1) };
+    });
+  }
+
+  function mergeSimilarColors(palette, threshold) {
+    const merged = [...palette];
+    // Remove white/near-white and black/near-black colors
+    // (white needs no painting; black is usually outline edges, not actual fill area)
+    for (let i = merged.length - 1; i >= 0; i--) {
+      const c = merged[i];
+      if ((c.r > 230 && c.g > 230 && c.b > 230) ||
+          (c.r < 30 && c.g < 30 && c.b < 30)) {
+        merged.splice(i, 1);
+        continue;
+      }
+    }
+    for (let i = merged.length - 1; i >= 0; i--) {
+      for (let j = 0; j < i; j++) {
+        const dr = merged[i].r - merged[j].r;
+        const dg = merged[i].g - merged[j].g;
+        const db = merged[i].b - merged[j].b;
+        if (Math.sqrt(dr * dr + dg * dg + db * db) < threshold) {
+          merged.splice(i, 1);
+          break;
+        }
+      }
+    }
+    return merged;
+  }
+
+  function buildColorMap(imageData, palette, SIZE) {
+    const s = imageData.data;
+    const N = SIZE * SIZE;
+    const colorMap = new Uint8Array(N);
+    colorMap.fill(255);
+    const pixelsPerColor = new Array(palette.length).fill(0);
+
+    for (let i = 0; i < N; i++) {
+      if (s[i * 4 + 3] <= 20) continue;
+      const r = s[i * 4], g = s[i * 4 + 1], b = s[i * 4 + 2];
+      // Skip white/near-white and black/near-black pixels (outlines, edges)
+      if (r > 230 && g > 230 && b > 230) continue;
+      if (r < 30 && g < 30 && b < 30) continue;
+      let bestDist = Infinity, bestIdx = 0;
+      for (let ci = 0; ci < palette.length; ci++) {
+        const dr = r - palette[ci].r;
+        const dg = g - palette[ci].g;
+        const db = b - palette[ci].b;
+        const dist = dr * dr + dg * dg + db * db;
+        if (dist < bestDist) { bestDist = dist; bestIdx = ci; }
+      }
+      colorMap[i] = bestIdx;
+      pixelsPerColor[bestIdx]++;
+    }
+
+    // Remove tiny paintable regions — flood-fill ANY paintable neighbor (color-agnostic)
+    // so narrow crevices between outlines are treated as one small region and removed.
+    const MIN_REGION = 150;
+    const visited = new Uint8Array(N);
+    const dx4 = [1, -1, SIZE, -SIZE];
+    for (let i = 0; i < N; i++) {
+      if (visited[i] || colorMap[i] === 255) continue;
+      const queue = [i];
+      const region = [];
+      visited[i] = 1;
+      while (queue.length > 0) {
+        const cur = queue.pop();
+        region.push(cur);
+        for (let d = 0; d < 4; d++) {
+          const ni = cur + dx4[d];
+          if (d === 0 && (cur % SIZE) === SIZE - 1) continue;
+          if (d === 1 && (cur % SIZE) === 0) continue;
+          if (ni < 0 || ni >= N || visited[ni]) continue;
+          if (colorMap[ni] !== 255) {
+            visited[ni] = 1;
+            queue.push(ni);
+          }
+        }
+      }
+      if (region.length < MIN_REGION) {
+        for (let ri = 0; ri < region.length; ri++) {
+          const ci = colorMap[region[ri]];
+          pixelsPerColor[ci]--;
+          colorMap[region[ri]] = 255;
+        }
+      }
+    }
+
+    return { colorMap, pixelsPerColor };
+  }
+
+  function renderFBCPalette() {
+    const pal = $('fbc-palette');
+    pal.innerHTML = '';
+    FBC.quantizedPalette.forEach((c, idx) => {
+      const btn = document.createElement('button');
+      btn.className = 'fbc-swatch' + (idx === FBC.selectedColorIdx ? ' selected' : '');
+      btn.style.background = c.hex;
+      btn.dataset.idx = idx;
+      btn.addEventListener('click', () => selectFBCColor(idx));
+      pal.appendChild(btn);
+    });
+  }
+
+  function selectFBCColor(idx) {
+    FBC.selectedColorIdx = idx;
+    FBC.erasing = false;
+    const eraserBtn = $('fbc-eraser-btn');
+    if (eraserBtn) eraserBtn.classList.remove('active');
+    // Re-activate last brush size btn if eraser was active
+    document.querySelectorAll('.fbc-brush-btn').forEach(b => {
+      if (b.id === 'fbc-eraser-btn') return;
+      // keep current active size
+    });
+    $('fbc-palette').querySelectorAll('.fbc-swatch').forEach(s => {
+      s.classList.toggle('selected', parseInt(s.dataset.idx) === idx);
+    });
+  }
+
+  function fbcPaintPixels(cx, cy, radius) {
+    const data = FBC.canvasImageData.data;
+    const SIZE = FBC.canvasSize;
+    const cm = FBC.colorMap;
+    const fm = FBC.filledMask;
+    const r2 = radius * radius;
+
+    const xMin = Math.max(0, Math.floor(cx - radius));
+    const xMax = Math.min(SIZE - 1, Math.ceil(cx + radius));
+    const yMin = Math.max(0, Math.floor(cy - radius));
+    const yMax = Math.min(SIZE - 1, Math.ceil(cy + radius));
+
+    for (let py = yMin; py <= yMax; py++) {
+      for (let px = xMin; px <= xMax; px++) {
+        const ddx = px - cx, ddy = py - cy;
+        if (ddx * ddx + ddy * ddy > r2) continue;
+        const idx = py * SIZE + px;
+        if (cm[idx] === 255) continue;
+
+        const pi = idx * 4;
+        if (FBC.erasing) {
+          data[pi] = 255; data[pi + 1] = 255; data[pi + 2] = 255; data[pi + 3] = 255;
+          fm[idx] = 0;
+        } else if (cm[idx] === FBC.selectedColorIdx) {
+          const c = FBC.quantizedPalette[FBC.selectedColorIdx];
+          data[pi] = c.r; data[pi + 1] = c.g; data[pi + 2] = c.b; data[pi + 3] = 255;
+          fm[idx] = 1;
+        }
+      }
+    }
+    FBC.colorCtx.putImageData(FBC.canvasImageData, 0, 0);
+  }
+
+  function getFBCCoords(e) {
+    const canvas = $('fbc-color-canvas');
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    const clientX = e.clientX ?? (e.touches && e.touches[0] ? e.touches[0].clientX : 0);
+    const clientY = e.clientY ?? (e.touches && e.touches[0] ? e.touches[0].clientY : 0);
+    return {
+      x: (clientX - rect.left) * scaleX,
+      y: (clientY - rect.top) * scaleY,
+    };
+  }
+
+  function onFBCDown(e) {
+    if (!FBC.erasing && FBC.selectedColorIdx < 0) return;
+    e.preventDefault();
+    // Save undo snapshot
+    const SIZE = FBC.canvasSize;
+    const snap = FBC.colorCtx.getImageData(0, 0, SIZE, SIZE);
+    const maskSnap = new Uint8Array(FBC.filledMask);
+    FBC.history.push({ imageData: new ImageData(new Uint8ClampedArray(snap.data), snap.width, snap.height), mask: maskSnap });
+    if (FBC.history.length > FBC_MAX_HISTORY) FBC.history.shift();
+
+    FBC.painting = true;
+    const { x, y } = getFBCCoords(e);
+    FBC.lastX = x;
+    FBC.lastY = y;
+    fbcPaintPixels(x, y, FBC.brushSize);
+  }
+
+  function onFBCMove(e) {
+    if (!FBC.painting) return;
+    e.preventDefault();
+    const { x, y } = getFBCCoords(e);
+    // Linear interpolation for smooth strokes
+    const dx = x - FBC.lastX;
+    const dy = y - FBC.lastY;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    const steps = Math.max(1, Math.floor(dist));
+    for (let i = 1; i <= steps; i++) {
+      const t = i / steps;
+      fbcPaintPixels(FBC.lastX + dx * t, FBC.lastY + dy * t, FBC.brushSize);
+    }
+    FBC.lastX = x;
+    FBC.lastY = y;
+  }
+
+  function onFBCUp() {
+    if (!FBC.painting) return;
+    FBC.painting = false;
+  }
+
+  function clearFBC() {
+    const SIZE = FBC.canvasSize;
+    FBC.colorCtx.fillStyle = 'white';
+    FBC.colorCtx.fillRect(0, 0, SIZE, SIZE);
+    FBC.canvasImageData = FBC.colorCtx.getImageData(0, 0, SIZE, SIZE);
+    FBC.filledMask = new Uint8Array(SIZE * SIZE);
+    FBC.history = [];
+  }
+
+  function undoFBC() {
+    if (FBC.history.length === 0) return;
+    const snap = FBC.history.pop();
+    FBC.colorCtx.putImageData(snap.imageData, 0, 0);
+    FBC.canvasImageData = FBC.colorCtx.getImageData(0, 0, FBC.canvasSize, FBC.canvasSize);
+    FBC.filledMask = snap.mask;
+  }
+
+  // Wire FBC canvas events
+  const fbcColorCanvas = $('fbc-color-canvas');
+  fbcColorCanvas.addEventListener('pointerdown', onFBCDown);
+  fbcColorCanvas.addEventListener('pointermove', onFBCMove);
+  fbcColorCanvas.addEventListener('pointerup', onFBCUp);
+  fbcColorCanvas.addEventListener('pointercancel', onFBCUp);
+
+  // FBC Brush size buttons
+  document.querySelectorAll('.fbc-brush-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (btn.id === 'fbc-eraser-btn') {
+        FBC.erasing = true;
+      } else {
+        FBC.erasing = false;
+        FBC.brushSize = parseInt(btn.dataset.size);
+      }
+      document.querySelectorAll('.fbc-brush-btn').forEach(b => b.classList.toggle('active', b === btn));
+      updateBrushCursor($('fbc-color-canvas'), FBC.brushSize, FBC.canvasSize);
+    });
+  });
+
+  $('fill-color-btn').addEventListener('click', openFBCGame);
+  $('fbc-close').addEventListener('click', () => $('fbc-modal').classList.add('hidden'));
+  $('fbc-next-btn').addEventListener('click', loadFBCRound);
+  $('fbc-clear-btn').addEventListener('click', clearFBC);
+  $('fbc-undo-btn').addEventListener('click', undoFBC);
 
   // ── Button wiring ─────────────────────────────────────────
   $('new-game-btn').addEventListener('click', () => initGame(GS.difficulty));

@@ -17,6 +17,7 @@
     <button id="new-game-btn">New Game</button>
     <button id="name-quiz-btn" title="Pokemon Name Quiz">Who's that?</button>
     <button id="coloring-btn" title="Pokemon Coloring">🎨 Color</button>
+    <button id="fill-color-btn" title="Fill by Color">🖌️ Fill</button>
   </header>
 
   <div id="stats-bar">
@@ -165,6 +166,39 @@
         <button id="cg-clear-btn">Clear</button>
         <button id="cg-undo-btn">↩ Undo</button>
         <button id="cg-next-btn">Next ➜</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Fill by Color Modal -->
+  <div id="fbc-modal" class="modal hidden">
+    <div class="modal-content fbc-content">
+      <div class="fbc-header">
+        <h2>Fill by Color!</h2>
+        <button id="fbc-close">✕</button>
+      </div>
+      <div class="fbc-top-row">
+        <div class="fbc-ref-wrap">
+          <p id="fbc-pokemon-name">...</p>
+          <img id="fbc-ref-img" />
+        </div>
+        <div id="fbc-palette"></div>
+      </div>
+      <div class="fbc-canvas-wrap">
+        <canvas id="fbc-color-canvas"></canvas>
+        <canvas id="fbc-outline-canvas"></canvas>
+      </div>
+      <div id="fbc-brush-sizes">
+        <button class="fbc-brush-btn" id="fbc-eraser-btn">Eraser</button>
+        <button class="fbc-brush-btn" data-size="3">S</button>
+        <button class="fbc-brush-btn active" data-size="7">M</button>
+        <button class="fbc-brush-btn" data-size="13">L</button>
+        <button class="fbc-brush-btn" data-size="21">XL</button>
+      </div>
+      <div class="fbc-btn-row">
+        <button id="fbc-clear-btn">Clear</button>
+        <button id="fbc-undo-btn">↩ Undo</button>
+        <button id="fbc-next-btn">Next ➜</button>
       </div>
     </div>
   </div>

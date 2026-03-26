@@ -16,6 +16,7 @@
     </div>
     <button id="new-game-btn">New Game</button>
     <button id="name-quiz-btn" title="Pokemon Name Quiz">Who's that?</button>
+    <button id="coloring-btn" title="Pokemon Coloring">🎨 Color</button>
   </header>
 
   <div id="stats-bar">
@@ -131,6 +132,40 @@
       </div>
       <div id="leaderboard-list"><p class="lb-loading">Loading...</p></div>
       <button id="leaderboard-close">Close</button>
+    </div>
+  </div>
+
+  <!-- Coloring Game Modal -->
+  <div id="coloring-modal" class="modal hidden">
+    <div class="modal-content coloring-content">
+      <div class="cg-header">
+        <h2>Color that Pokémon!</h2>
+        <button id="coloring-close" title="Close">✕</button>
+      </div>
+      <div class="cg-top-row">
+        <div class="cg-ref-wrap">
+          <p class="cg-ref-label" id="cg-pokemon-name">...</p>
+          <img id="cg-ref-img" src="" alt="" />
+        </div>
+        <div id="cg-palette"></div>
+      </div>
+      <div class="cg-canvas-wrap">
+        <canvas id="cg-color-canvas" width="280" height="280"></canvas>
+        <canvas id="cg-outline-canvas" width="280" height="280"></canvas>
+      </div>
+      <div id="cg-brush-sizes">
+        <button class="cg-brush-btn" id="cg-eraser-btn">Eraser</button>
+        <button class="cg-brush-btn" data-size="1">XS</button>
+        <button class="cg-brush-btn active" data-size="3">S</button>
+        <button class="cg-brush-btn" data-size="7">M</button>
+        <button class="cg-brush-btn" data-size="13">L</button>
+        <button class="cg-brush-btn" data-size="21">XL</button>
+      </div>
+      <div class="cg-btn-row">
+        <button id="cg-clear-btn">Clear</button>
+        <button id="cg-undo-btn">↩ Undo</button>
+        <button id="cg-next-btn">Next ➜</button>
+      </div>
     </div>
   </div>
 

@@ -1005,6 +1005,301 @@
     if (e.key === 'z' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); doUndo(); }
   });
 
+  // ── Pokemon Coloring Game ────────────────────────────────
+  const CG = {
+    pokemonID: null,
+    selectedColor: '#FF5252',
+    brushSize: 3,
+    erasing: false,
+    colorCtx: null,
+    outlineCtx: null,
+    painting: false,
+    busy: false,
+    history: [],
+  };
+  const CG_MAX_HISTORY = 20;
+  const CG_PALETTE = [
+    '#FF5252', '#FF9800', '#FFEB3B', '#4CAF50',
+    '#2196F3', '#9C27B0', '#F06292', '#795548',
+    '#00BCD4', '#8BC34A', '#FF5722', '#607D8B',
+    '#E91E63', '#3F51B5', '#009688', '#FFC107',
+    '#B0BEC5', '#CE93D8', '#A5D6A7', '#FFE0B2',
+    '#000000',
+  ];
+
+  function openColoringGame() {
+    CG.colorCtx = $('cg-color-canvas').getContext('2d');
+    CG.outlineCtx = $('cg-outline-canvas').getContext('2d');
+    CG.history = [];
+    $('coloring-modal').classList.remove('hidden');
+    renderCGPalette();
+    loadCGRound();
+  }
+
+  function renderCGPalette() {
+    const palette = $('cg-palette');
+    palette.innerHTML = '';
+    CG_PALETTE.forEach(hex => {
+      const btn = document.createElement('button');
+      btn.className = 'cg-swatch' + (hex === CG.selectedColor ? ' selected' : '');
+      btn.style.background = hex;
+      btn.dataset.color = hex;
+      if (hex === '#FFFFFF') btn.style.border = '2px solid #ccc';
+      btn.addEventListener('click', () => selectCGColor(hex));
+      palette.appendChild(btn);
+    });
+  }
+
+  function selectCGColor(color) {
+    CG.selectedColor = color;
+    CG.erasing = false;
+    // Deactivate eraser button, re-activate last brush size button
+    const eraserBtn = $('cg-eraser-btn');
+    if (eraserBtn) eraserBtn.classList.remove('active');
+    $('cg-palette').querySelectorAll('.cg-swatch').forEach(s => {
+      s.classList.toggle('selected', s.dataset.color === color);
+      if (s.dataset.color !== '#FFFFFF') s.style.border = '';
+      if (s.dataset.color === '#FFFFFF') s.style.border = '3px solid #ccc';
+      if (s.classList.contains('selected') && s.dataset.color === '#FFFFFF') {
+        s.style.border = '3px solid #2980b9';
+      }
+    });
+  }
+
+  async function loadCGRound() {
+    if (CG.busy) return;
+    CG.busy = true;
+    CG.history = [];
+    const wrap = document.querySelector('.cg-canvas-wrap');
+    wrap.classList.add('cg-loading');
+
+    const id = Math.floor(Math.random() * 1025) + 1;
+    CG.pokemonID = id;
+
+    $('cg-pokemon-name').textContent = '...';
+
+    const refImg = $('cg-ref-img');
+    refImg.src = `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${id}.png`;
+    refImg.onerror = () => {
+      refImg.src = `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${id}.png`;
+    };
+
+    try {
+      await processImageToOutline(id);
+    } catch (e) {
+      console.error('Coloring outline failed:', e);
+    }
+
+    // Fetch and display pokemon name (don't block on failure)
+    fetchPokemonName(id, 'en').then(name => {
+      $('cg-pokemon-name').textContent = name ? name.charAt(0).toUpperCase() + name.slice(1) : `#${id}`;
+    }).catch(() => {
+      $('cg-pokemon-name').textContent = `#${id}`;
+    });
+
+    wrap.classList.remove('cg-loading');
+    CG.busy = false;
+  }
+
+  function processImageToOutline(id) {
+    function applyOutline(img) {
+      const SIZE = 280;
+      const PAD = 12;
+
+      // Draw onto offscreen canvas with transparent background
+      const off = document.createElement('canvas');
+      off.width = SIZE;
+      off.height = SIZE;
+      const ctx = off.getContext('2d');
+
+      const scale = Math.min((SIZE - PAD * 2) / img.width, (SIZE - PAD * 2) / img.height);
+      const dw = img.width * scale;
+      const dh = img.height * scale;
+      const dx = (SIZE - dw) / 2;
+      const dy = (SIZE - dh) / 2;
+      ctx.drawImage(img, dx, dy, dw, dh);
+
+      const src = ctx.getImageData(0, 0, SIZE, SIZE);
+      const s = src.data;
+      const dst = ctx.createImageData(SIZE, SIZE);
+      const d = dst.data;
+      const N = SIZE * SIZE;
+
+      // ── Color-distance edge detection (optimized for pixel-art sprites) ──
+      // No blur, no Sobel — direct RGB distance to 4-connected neighbors only.
+      // 4-connected avoids catching diagonal anti-aliasing artifacts.
+
+      const EDGE_THRESH = 48;   // RGB distance — high enough to skip anti-aliasing, low enough for real edges
+      const edge = new Uint8Array(N);
+      const dirs4dx = [1, 0, -1, 0];
+      const dirs4dy = [0, 1, 0, -1];
+
+      for (let y = 0; y < SIZE; y++) {
+        for (let x = 0; x < SIZE; x++) {
+          const idx = y * SIZE + x;
+          const a0 = s[idx * 4 + 3];
+          if (a0 < 10) continue;
+
+          const r0 = s[idx * 4], g0 = s[idx * 4 + 1], b0 = s[idx * 4 + 2];
+
+          // Alpha boundary check (8-dir for clean silhouette)
+          let isAlpha = false;
+          for (let dd = 0; dd < 4; dd++) {
+            const nx = x + dirs4dx[dd], ny = y + dirs4dy[dd];
+            if (nx < 0 || nx >= SIZE || ny < 0 || ny >= SIZE ||
+                s[(ny * SIZE + nx) * 4 + 3] < 10) {
+              isAlpha = true; break;
+            }
+          }
+          if (isAlpha) { edge[idx] = 1; continue; }
+
+          // Color distance check (4-connected only → thin 1px lines)
+          for (let dd = 0; dd < 4; dd++) {
+            const nx = x + dirs4dx[dd], ny = y + dirs4dy[dd];
+            if (nx < 0 || nx >= SIZE || ny < 0 || ny >= SIZE) continue;
+            const ni = ny * SIZE + nx;
+            if (s[ni * 4 + 3] < 10) continue;
+            const dr = r0 - s[ni * 4];
+            const dg = g0 - s[ni * 4 + 1];
+            const db = b0 - s[ni * 4 + 2];
+            const dist = Math.sqrt(dr * dr + dg * dg + db * db);
+            if (dist > EDGE_THRESH) { edge[idx] = 1; break; }
+          }
+        }
+      }
+
+      // Remove isolated noise: edge pixel with 0 edge neighbors → remove
+      const dirs8 = [-SIZE - 1, -SIZE, -SIZE + 1, -1, 1, SIZE - 1, SIZE, SIZE + 1];
+      const clean = new Uint8Array(N);
+      for (let i = 0; i < N; i++) {
+        if (!edge[i]) continue;
+        let neighbors = 0;
+        for (let di = 0; di < 8; di++) {
+          const ni = i + dirs8[di];
+          if (ni >= 0 && ni < N && edge[ni]) neighbors++;
+        }
+        clean[i] = (neighbors >= 1) ? 1 : 0;
+      }
+
+      // Render clean edges as black pixels (thin 1px lines)
+      for (let i = 0; i < N; i++) {
+        if (clean[i]) {
+          d[i * 4] = 0; d[i * 4 + 1] = 0; d[i * 4 + 2] = 0; d[i * 4 + 3] = 255;
+        }
+      }
+
+      // Write outline canvas (transparent bg + black lines)
+      CG.outlineCtx.clearRect(0, 0, SIZE, SIZE);
+      CG.outlineCtx.putImageData(dst, 0, 0);
+
+      // White background on color canvas
+      CG.colorCtx.fillStyle = 'white';
+      CG.colorCtx.fillRect(0, 0, SIZE, SIZE);
+    }
+
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        applyOutline(img);
+        resolve();
+      };
+      img.onerror = () => {
+        // Fallback to default sprite
+        const fallback = new Image();
+        fallback.crossOrigin = 'anonymous';
+        fallback.onload = () => {
+          applyOutline(fallback);
+          resolve();
+        };
+        fallback.onerror = reject;
+        fallback.src = `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${id}.png`;
+      };
+      img.src = `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${id}.png`;
+    });
+  }
+
+  function getCGCoords(e) {
+    const canvas = $('cg-color-canvas');
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    const clientX = e.clientX ?? (e.touches && e.touches[0] ? e.touches[0].clientX : 0);
+    const clientY = e.clientY ?? (e.touches && e.touches[0] ? e.touches[0].clientY : 0);
+    return {
+      x: (clientX - rect.left) * scaleX,
+      y: (clientY - rect.top) * scaleY,
+    };
+  }
+
+  function paintAt(x, y) {
+    const ctx = CG.colorCtx;
+    ctx.beginPath();
+    ctx.arc(x, y, CG.brushSize, 0, Math.PI * 2);
+    ctx.fillStyle = CG.erasing ? '#FFFFFF' : CG.selectedColor;
+    ctx.fill();
+  }
+
+  function onBrushDown(e) {
+    e.preventDefault();
+    // Save snapshot for undo
+    const snap = CG.colorCtx.getImageData(0, 0, 280, 280);
+    CG.history.push(new ImageData(new Uint8ClampedArray(snap.data), snap.width, snap.height));
+    if (CG.history.length > CG_MAX_HISTORY) CG.history.shift();
+    CG.painting = true;
+    const { x, y } = getCGCoords(e);
+    paintAt(x, y);
+  }
+
+  function onBrushMove(e) {
+    if (!CG.painting) return;
+    e.preventDefault();
+    const { x, y } = getCGCoords(e);
+    paintAt(x, y);
+  }
+
+  function onBrushUp() {
+    CG.painting = false;
+  }
+
+  function clearCanvas() {
+    CG.colorCtx.fillStyle = 'white';
+    CG.colorCtx.fillRect(0, 0, 280, 280);
+    CG.history = [];
+  }
+
+  function undoCG() {
+    if (CG.history.length === 0) return;
+    const snap = CG.history.pop();
+    CG.colorCtx.putImageData(snap, 0, 0);
+  }
+
+  // Wire coloring canvas events
+  const cgColorCanvas = $('cg-color-canvas');
+  cgColorCanvas.addEventListener('pointerdown', onBrushDown);
+  cgColorCanvas.addEventListener('pointermove', onBrushMove);
+  cgColorCanvas.addEventListener('pointerup', onBrushUp);
+  cgColorCanvas.addEventListener('pointercancel', onBrushUp);
+
+  // Brush size buttons
+  document.querySelectorAll('.cg-brush-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (btn.id === 'cg-eraser-btn') {
+        CG.erasing = true;
+      } else {
+        CG.erasing = false;
+        CG.brushSize = parseInt(btn.dataset.size);
+      }
+      document.querySelectorAll('.cg-brush-btn').forEach(b => b.classList.toggle('active', b === btn));
+    });
+  });
+
+  $('coloring-btn').addEventListener('click', openColoringGame);
+  $('coloring-close').addEventListener('click', () => $('coloring-modal').classList.add('hidden'));
+  $('cg-next-btn').addEventListener('click', loadCGRound);
+  $('cg-clear-btn').addEventListener('click', clearCanvas);
+  $('cg-undo-btn').addEventListener('click', undoCG);
+
   // ── Button wiring ─────────────────────────────────────────
   $('new-game-btn').addEventListener('click', () => initGame(GS.difficulty));
   $('undo-btn').addEventListener('click', doUndo);

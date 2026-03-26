@@ -744,6 +744,195 @@ main {
 .leaderboard-diff.hard { background: #ffe0e0; color: #c0392b; }
 .leaderboard-time { font-variant-numeric: tabular-nums; color: #555; white-space: nowrap; }
 
+/* ===== Coloring Game Button ===== */
+#coloring-btn {
+  padding: 6px 12px;
+  background: #e67e22;
+  color: white;
+  border: none;
+  border-radius: 20px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+  white-space: nowrap;
+}
+#coloring-btn:hover { background: #ca6f1e; }
+
+/* ===== Coloring Game Modal ===== */
+.coloring-content {
+  max-width: 340px;
+  padding: 16px 16px 18px;
+  text-align: left;
+  overflow: hidden;
+}
+
+.cg-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  gap: 8px;
+}
+.cg-header h2 { margin: 0; font-size: 1.2rem; }
+
+#coloring-close {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: none;
+  background: #aaa;
+  color: white;
+  font-size: 0.8rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+#coloring-close:hover { background: #888; }
+
+.cg-top-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 10px;
+  min-width: 0;
+}
+
+.cg-ref-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex-shrink: 0;
+}
+.cg-ref-label {
+  font-size: 0.7rem;
+  color: #888;
+  margin: 0 0 3px;
+  text-align: center;
+}
+#cg-ref-img {
+  width: 52px;
+  height: 52px;
+  object-fit: contain;
+  border: 1px solid #eee;
+  border-radius: 6px;
+  background: #fafafa;
+}
+
+#cg-palette {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  flex: 1;
+  min-width: 0;
+  justify-content: flex-start;
+  align-content: flex-start;
+}
+
+.modal-content button.cg-swatch {
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: border-color 0.12s, outline 0.12s;
+  padding: 10px 13px;
+  box-sizing: border-box;
+  flex-shrink: 0;
+  margin-top: 0;
+  font-size: 0;
+  line-height: 0;
+  background: currentColor;
+}
+.modal-content button.cg-swatch:hover { outline: 1.5px solid #2980b9; outline-offset: 0px; }
+.modal-content button.cg-swatch.selected { border-color: #2980b9; outline: 1.5px solid #2980b9; outline-offset: 0px; }
+
+.cg-canvas-wrap {
+  position: relative;
+  width: 100%;
+  max-width: 320px;
+  aspect-ratio: 1;
+  margin: 0 auto 8px;
+  touch-action: none;
+}
+.cg-canvas-wrap canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  max-width: 100%;
+  border-radius: 8px;
+  border: 1px solid #ddd;
+}
+#cg-color-canvas { cursor: crosshair; }
+#cg-outline-canvas { pointer-events: none; }
+
+.cg-canvas-wrap.cg-loading canvas { opacity: 0.4; cursor: wait; }
+
+#cg-brush-sizes {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+  margin-bottom: 8px;
+  flex-wrap: nowrap;
+}
+.modal-content .cg-brush-btn {
+  padding: 10px 10px;
+  border: 2px solid #e67e22;
+  border-radius: 16px;
+  background: white;
+  color: #e67e22;
+  font-size: 0.8rem;
+  margin-top: 0;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.12s, background 0.12s, color 0.12s;
+}
+.cg-brush-btn.active, .cg-brush-btn:hover {
+  border-color: #e67e22;
+  background: #e67e22;
+  color: white;
+}
+#cg-eraser-btn {
+  border-color: #888;
+  color: #888;
+}
+#cg-eraser-btn.active, #cg-eraser-btn:hover {
+  border-color: #555;
+  background: #555;
+  color: white;
+}
+
+.cg-btn-row {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+}
+.cg-btn-row button {
+  padding: 4px 10px;
+  border-radius: 16px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  border: 2px solid #3355aa;
+}
+#cg-clear-btn, #cg-undo-btn {
+  background: white;
+  color: #3355aa;
+}
+#cg-clear-btn:hover, #cg-undo-btn:hover {
+  background: #3355aa;
+  color: white;
+}
+#cg-next-btn {
+  background: #3355aa;
+  color: white;
+}
+#cg-next-btn:hover { background: #2244aa; }
+
 /* ===== Responsive ===== */
 @media (max-width: 420px) {
   h1 { font-size: 1.1rem; }

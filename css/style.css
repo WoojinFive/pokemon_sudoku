@@ -761,10 +761,18 @@ main {
 
 /* ===== Coloring Game Modal ===== */
 .coloring-content {
-  max-width: 340px;
+  max-width: 90vw;
+  width: 340px;
   padding: 16px 16px 18px;
   text-align: left;
   overflow: hidden;
+}
+
+@media (min-width: 600px) {
+  .coloring-content { width: 520px; }
+}
+@media (min-width: 900px) {
+  .coloring-content { width: 640px; }
 }
 
 .cg-header {
@@ -851,7 +859,7 @@ main {
 .cg-canvas-wrap {
   position: relative;
   width: 100%;
-  max-width: 320px;
+  max-width: 100%;
   aspect-ratio: 1;
   margin: 0 auto 8px;
   touch-action: none;

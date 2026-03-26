@@ -1010,7 +1010,10 @@
     pokemonID: null,
     selectedColor: '#FF5252',
     brushSize: 3,
+    canvasSize: 280,
     erasing: false,
+    lastX: 0,
+    lastY: 0,
     colorCtx: null,
     outlineCtx: null,
     painting: false,
@@ -1028,10 +1031,21 @@
   ];
 
   function openColoringGame() {
-    CG.colorCtx = $('cg-color-canvas').getContext('2d');
-    CG.outlineCtx = $('cg-outline-canvas').getContext('2d');
-    CG.history = [];
     $('coloring-modal').classList.remove('hidden');
+    // Set canvas resolution based on actual display size
+    const wrap = document.querySelector('.cg-canvas-wrap');
+    const displaySize = Math.round(wrap.clientWidth);
+    const res = Math.max(280, displaySize);  // at least 280, scale up for larger screens
+    const colorCanvas = $('cg-color-canvas');
+    const outlineCanvas = $('cg-outline-canvas');
+    colorCanvas.width = res;
+    colorCanvas.height = res;
+    outlineCanvas.width = res;
+    outlineCanvas.height = res;
+    CG.canvasSize = res;
+    CG.colorCtx = colorCanvas.getContext('2d');
+    CG.outlineCtx = outlineCanvas.getContext('2d');
+    CG.history = [];
     renderCGPalette();
     loadCGRound();
   }
@@ -1103,7 +1117,7 @@
 
   function processImageToOutline(id) {
     function applyOutline(img) {
-      const SIZE = 280;
+      const SIZE = CG.canvasSize || 280;
       const PAD = 12;
 
       // Draw onto offscreen canvas with transparent background
@@ -1232,7 +1246,22 @@
     };
   }
 
-  function paintAt(x, y) {
+  function paintStroke(x0, y0, x1, y1) {
+    const ctx = CG.colorCtx;
+    const color = CG.erasing ? '#FFFFFF' : CG.selectedColor;
+    const r = CG.brushSize;
+    ctx.strokeStyle = color;
+    ctx.fillStyle = color;
+    ctx.lineWidth = r * 2;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.beginPath();
+    ctx.moveTo(x0, y0);
+    ctx.lineTo(x1, y1);
+    ctx.stroke();
+  }
+
+  function paintDot(x, y) {
     const ctx = CG.colorCtx;
     ctx.beginPath();
     ctx.arc(x, y, CG.brushSize, 0, Math.PI * 2);
@@ -1243,19 +1272,24 @@
   function onBrushDown(e) {
     e.preventDefault();
     // Save snapshot for undo
-    const snap = CG.colorCtx.getImageData(0, 0, 280, 280);
+    const cSize = CG.canvasSize || 280;
+    const snap = CG.colorCtx.getImageData(0, 0, cSize, cSize);
     CG.history.push(new ImageData(new Uint8ClampedArray(snap.data), snap.width, snap.height));
     if (CG.history.length > CG_MAX_HISTORY) CG.history.shift();
     CG.painting = true;
     const { x, y } = getCGCoords(e);
-    paintAt(x, y);
+    CG.lastX = x;
+    CG.lastY = y;
+    paintDot(x, y);
   }
 
   function onBrushMove(e) {
     if (!CG.painting) return;
     e.preventDefault();
     const { x, y } = getCGCoords(e);
-    paintAt(x, y);
+    paintStroke(CG.lastX, CG.lastY, x, y);
+    CG.lastX = x;
+    CG.lastY = y;
   }
 
   function onBrushUp() {
@@ -1264,7 +1298,7 @@
 
   function clearCanvas() {
     CG.colorCtx.fillStyle = 'white';
-    CG.colorCtx.fillRect(0, 0, 280, 280);
+    CG.colorCtx.fillRect(0, 0, CG.canvasSize || 280, CG.canvasSize || 280);
     CG.history = [];
   }
 

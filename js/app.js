@@ -1032,10 +1032,10 @@
 
   function openColoringGame() {
     $('coloring-modal').classList.remove('hidden');
-    // Set canvas resolution based on actual display size
+    // Set canvas resolution based on actual display size (capped for performance)
     const wrap = document.querySelector('.cg-canvas-wrap');
     const displaySize = Math.round(wrap.clientWidth);
-    const res = Math.max(280, displaySize);  // at least 280, scale up for larger screens
+    const res = Math.min(420, Math.max(280, displaySize));
     const colorCanvas = $('cg-color-canvas');
     const outlineCanvas = $('cg-outline-canvas');
     colorCanvas.width = res;
@@ -1373,7 +1373,7 @@
     $('fbc-modal').classList.remove('hidden');
     const wrap = document.querySelector('.fbc-canvas-wrap');
     const displaySize = Math.round(wrap.clientWidth);
-    const res = Math.max(280, displaySize);
+    const res = Math.min(420, Math.max(280, displaySize));
     const colorCanvas = $('fbc-color-canvas');
     const outlineCanvas = $('fbc-outline-canvas');
     colorCanvas.width = res;

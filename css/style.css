@@ -765,7 +765,9 @@ main {
   width: 340px;
   padding: 16px 16px 18px;
   text-align: left;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
+  max-height: 95vh;
 }
 
 @media (min-width: 600px) {
@@ -881,36 +883,39 @@ main {
 
 #cg-brush-sizes {
   display: flex;
-  gap: 6px;
+  gap: 8px;
+  align-items: center;
   justify-content: center;
   margin-bottom: 8px;
-  flex-wrap: nowrap;
 }
 .modal-content .cg-brush-btn {
-  padding: 10px 10px;
-  border: 2px solid #e67e22;
+  padding: 6px 12px;
+  border: 2px solid #888;
   border-radius: 16px;
   background: white;
-  color: #e67e22;
+  color: #888;
   font-size: 0.8rem;
   margin-top: 0;
   font-weight: 600;
   cursor: pointer;
   transition: border-color 0.12s, background 0.12s, color 0.12s;
 }
-.cg-brush-btn.active, .cg-brush-btn:hover {
-  border-color: #e67e22;
-  background: #e67e22;
-  color: white;
-}
-#cg-eraser-btn {
-  border-color: #888;
-  color: #888;
-}
 #cg-eraser-btn.active, #cg-eraser-btn:hover {
   border-color: #555;
   background: #555;
   color: white;
+}
+#cg-brush-range {
+  flex: 1;
+  max-width: 180px;
+  accent-color: #e67e22;
+}
+#cg-brush-label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #e67e22;
+  min-width: 20px;
+  text-align: center;
 }
 
 .cg-btn-row {
@@ -962,7 +967,9 @@ main {
   width: 340px;
   padding: 16px 16px 18px;
   text-align: left;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
+  max-height: 95vh;
 }
 @media (min-width: 600px) { .fbc-content { width: 520px; } }
 @media (min-width: 900px) { .fbc-content { width: 640px; } }
@@ -1047,9 +1054,40 @@ main {
   font-size: 0;
   line-height: 0;
   position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.fbc-swatch-num {
+  font-size: 10px;
+  font-weight: 800;
+  color: white;
+  text-shadow: 0 0 3px rgba(0,0,0,0.8);
+  pointer-events: none;
+  line-height: 1;
 }
 .modal-content button.fbc-swatch:hover { outline: 1.5px solid #27ae60; outline-offset: 0px; }
 .modal-content button.fbc-swatch.selected { border-color: #27ae60; outline: 2px solid #27ae60; outline-offset: 0px; }
+.modal-content button.fbc-swatch.completed {
+  opacity: 0.5;
+}
+.modal-content button.fbc-swatch.completed::after {
+  content: '✓';
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  font-weight: 900;
+  color: #fff;
+  text-shadow:
+    0 0 3px rgba(0,0,0,0.9),
+    0 0 6px rgba(0,0,0,0.7),
+    1px 1px 0 rgba(0,0,0,0.8),
+    -1px -1px 0 rgba(0,0,0,0.8);
+}
+
 .fbc-canvas-wrap {
   position: relative;
   width: 100%;
@@ -1075,36 +1113,39 @@ main {
 
 #fbc-brush-sizes {
   display: flex;
-  gap: 6px;
+  gap: 8px;
+  align-items: center;
   justify-content: center;
   margin-bottom: 8px;
-  flex-wrap: nowrap;
 }
 .modal-content .fbc-brush-btn {
-  padding: 10px 10px;
-  border: 2px solid #27ae60;
+  padding: 6px 12px;
+  border: 2px solid #888;
   border-radius: 16px;
   background: white;
-  color: #27ae60;
+  color: #888;
   font-size: 0.8rem;
   margin-top: 0;
   font-weight: 600;
   cursor: pointer;
   transition: border-color 0.12s, background 0.12s, color 0.12s;
 }
-.fbc-brush-btn.active, .fbc-brush-btn:hover {
-  border-color: #27ae60;
-  background: #27ae60;
-  color: white;
-}
-#fbc-eraser-btn {
-  border-color: #888;
-  color: #888;
-}
 #fbc-eraser-btn.active, #fbc-eraser-btn:hover {
   border-color: #555;
   background: #555;
   color: white;
+}
+#fbc-brush-range {
+  flex: 1;
+  max-width: 180px;
+  accent-color: #27ae60;
+}
+#fbc-brush-label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #27ae60;
+  min-width: 20px;
+  text-align: center;
 }
 
 .fbc-btn-row {
@@ -1134,6 +1175,29 @@ main {
   color: white;
 }
 #fbc-next-btn:hover { background: #2244aa; }
+
+.fbc-complete-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(39, 174, 96, 0.25);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+  cursor: pointer;
+  animation: fbcFadeIn 0.5s ease;
+}
+.fbc-complete-overlay span {
+  background: white;
+  padding: 12px 24px;
+  border-radius: 16px;
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: #27ae60;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+}
+@keyframes fbcFadeIn { from { opacity: 0; } to { opacity: 1; } }
 
 /* ===== Responsive ===== */
 @media (max-width: 420px) {

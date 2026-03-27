@@ -156,11 +156,8 @@
       </div>
       <div id="cg-brush-sizes">
         <button class="cg-brush-btn" id="cg-eraser-btn">Eraser</button>
-        <button class="cg-brush-btn" data-size="1">XS</button>
-        <button class="cg-brush-btn active" data-size="3">S</button>
-        <button class="cg-brush-btn" data-size="7">M</button>
-        <button class="cg-brush-btn" data-size="13">L</button>
-        <button class="cg-brush-btn" data-size="21">XL</button>
+        <input type="range" id="cg-brush-range" min="1" max="200" value="3" />
+        <span id="cg-brush-label">3</span>
       </div>
       <div class="cg-btn-row">
         <button id="cg-clear-btn">Clear</button>
@@ -190,10 +187,8 @@
       </div>
       <div id="fbc-brush-sizes">
         <button class="fbc-brush-btn" id="fbc-eraser-btn">Eraser</button>
-        <button class="fbc-brush-btn" data-size="3">S</button>
-        <button class="fbc-brush-btn active" data-size="7">M</button>
-        <button class="fbc-brush-btn" data-size="13">L</button>
-        <button class="fbc-brush-btn" data-size="21">XL</button>
+        <input type="range" id="fbc-brush-range" min="1" max="200" value="7" />
+        <span id="fbc-brush-label">7</span>
       </div>
       <div class="fbc-btn-row">
         <button id="fbc-clear-btn">Clear</button>

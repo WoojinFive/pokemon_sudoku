@@ -1048,6 +1048,9 @@
     CG.history = [];
     renderCGPalette();
     loadCGRound();
+    const cgMax = getMaxBrushSize(colorCanvas, CG.canvasSize);
+    $('cg-brush-range').max = cgMax;
+    if (CG.brushSize > cgMax) { CG.brushSize = cgMax; $('cg-brush-range').value = cgMax; $('cg-brush-label').textContent = cgMax; }
     updateBrushCursor(colorCanvas, CG.brushSize, CG.canvasSize);
   }
 
@@ -1221,12 +1224,18 @@
   }
 
   // ── Custom brush cursor (shared by CG & FBC) ──
+  function getMaxBrushSize(canvas, canvasSize) {
+    const rect = canvas.getBoundingClientRect();
+    const displayScale = rect.width / canvasSize;
+    return Math.floor(63 / displayScale);
+  }
+
   function updateBrushCursor(canvas, brushSize, canvasSize) {
     const rect = canvas.getBoundingClientRect();
     const displayScale = rect.width / canvasSize;
     const diameter = Math.max(4, Math.round(brushSize * 2 * displayScale));
     const r = diameter / 2;
-    const size = diameter + 2; // +2 for stroke
+    const size = diameter + 2;
     const half = size / 2;
     const svgCircle = `<svg xmlns='http://www.w3.org/2000/svg' width='${size}' height='${size}'><circle cx='${half}' cy='${half}' r='${r}' fill='none' stroke='black' stroke-width='1'/><circle cx='${half}' cy='${half}' r='${r}' fill='none' stroke='white' stroke-width='0.5'/></svg>`;
     const encoded = 'data:image/svg+xml;base64,' + btoa(svgCircle);
@@ -1315,18 +1324,20 @@
   cgColorCanvas.addEventListener('pointerup', onBrushUp);
   cgColorCanvas.addEventListener('pointercancel', onBrushUp);
 
-  // Brush size buttons
-  document.querySelectorAll('.cg-brush-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      if (btn.id === 'cg-eraser-btn') {
-        CG.erasing = true;
-      } else {
-        CG.erasing = false;
-        CG.brushSize = parseInt(btn.dataset.size);
-      }
-      document.querySelectorAll('.cg-brush-btn').forEach(b => b.classList.toggle('active', b === btn));
-      updateBrushCursor($('cg-color-canvas'), CG.brushSize, CG.canvasSize);
-    });
+  // CG brush range slider
+  const cgBrushRange = $('cg-brush-range');
+  const cgBrushLabel = $('cg-brush-label');
+  cgBrushRange.addEventListener('input', () => {
+    CG.brushSize = parseInt(cgBrushRange.value);
+    cgBrushLabel.textContent = cgBrushRange.value;
+    CG.erasing = false;
+    $('cg-eraser-btn').classList.remove('active');
+    updateBrushCursor($('cg-color-canvas'), CG.brushSize, CG.canvasSize);
+  });
+  $('cg-eraser-btn').addEventListener('click', () => {
+    CG.erasing = !CG.erasing;
+    $('cg-eraser-btn').classList.toggle('active', CG.erasing);
+    updateBrushCursor($('cg-color-canvas'), CG.brushSize, CG.canvasSize);
   });
 
   $('coloring-btn').addEventListener('click', openColoringGame);
@@ -1352,6 +1363,9 @@
     filledMask: null,
     canvasImageData: null,
     history: [],
+    pixelsPerColor: [],
+    filledPerColor: [],
+    completedShown: false,
   };
   const FBC_MAX_HISTORY = 20;
 
@@ -1371,6 +1385,9 @@
     FBC.outlineCtx = outlineCanvas.getContext('2d');
     FBC.history = [];
     loadFBCRound();
+    const fbcMax = getMaxBrushSize(colorCanvas, FBC.canvasSize);
+    $('fbc-brush-range').max = fbcMax;
+    if (FBC.brushSize > fbcMax) { FBC.brushSize = fbcMax; $('fbc-brush-range').value = fbcMax; $('fbc-brush-label').textContent = fbcMax; }
     updateBrushCursor(colorCanvas, FBC.brushSize, FBC.canvasSize);
   }
 
@@ -1380,6 +1397,7 @@
     FBC.history = [];
     FBC.selectedColorIdx = -1;
     FBC.erasing = false;
+    FBC.completedShown = false;
 
     const wrap = document.querySelector('.fbc-canvas-wrap');
     wrap.classList.add('fbc-loading');
@@ -1431,12 +1449,85 @@
     const { srcImageData } = applyOutline(img, FBC.outlineCtx, FBC.colorCtx, SIZE);
     const palette = medianCut(srcImageData, 20);
     const merged = mergeSimilarColors(palette, 25);
-    FBC.quantizedPalette = merged;
-    const { colorMap } = buildColorMap(srcImageData, merged, SIZE);
+    const { colorMap, pixelsPerColor } = buildColorMap(srcImageData, merged, SIZE);
     FBC.colorMap = colorMap;
+
+    // Region-based cleanup: find same-color connected components,
+    // remove colors that have NO region >= MIN_VISIBLE pixels,
+    // and remove individual tiny same-color patches.
+    const MIN_VISIBLE = 200;
+    const hasVisibleRegion = new Uint8Array(merged.length);
+    {
+      const visited = new Uint8Array(SIZE * SIZE);
+      const dirs = [1, -1, SIZE, -SIZE];
+      for (let i = 0; i < SIZE * SIZE; i++) {
+        if (visited[i] || colorMap[i] === 255) continue;
+        const ci = colorMap[i];
+        const queue = [i];
+        visited[i] = 1;
+        let head = 0;
+        while (head < queue.length) {
+          const p = queue[head++];
+          for (let d = 0; d < 4; d++) {
+            const np = p + dirs[d];
+            if (np < 0 || np >= SIZE * SIZE) continue;
+            if (dirs[d] === 1 && (p % SIZE) === SIZE - 1) continue;
+            if (dirs[d] === -1 && (p % SIZE) === 0) continue;
+            if (visited[np] || colorMap[np] !== ci) continue;
+            visited[np] = 1;
+            queue.push(np);
+          }
+        }
+        if (queue.length >= MIN_VISIBLE) {
+          hasVisibleRegion[ci] = 1;
+        } else {
+          // Tiny same-color patch: mark unpaintable
+          for (let j = 0; j < queue.length; j++) {
+            pixelsPerColor[colorMap[queue[j]]]--;
+            colorMap[queue[j]] = 255;
+          }
+        }
+      }
+    }
+    // Remove colors with no visible region at all
+    for (let ci = 0; ci < merged.length; ci++) {
+      if (!hasVisibleRegion[ci] && pixelsPerColor[ci] > 0) {
+        for (let i = 0; i < SIZE * SIZE; i++) {
+          if (colorMap[i] === ci) colorMap[i] = 255;
+        }
+        pixelsPerColor[ci] = 0;
+      }
+    }
+
+    // Compact palette: remove zero-pixel colors, remap colorMap
+    const kept = [];
+    const remap = new Array(merged.length).fill(255);
+    for (let ci = 0; ci < merged.length; ci++) {
+      if (pixelsPerColor[ci] > 0) {
+        remap[ci] = kept.length;
+        kept.push({ color: merged[ci], pixels: pixelsPerColor[ci] });
+      }
+    }
+    for (let i = 0; i < SIZE * SIZE; i++) {
+      if (colorMap[i] !== 255) colorMap[i] = remap[colorMap[i]];
+    }
+    FBC.quantizedPalette = kept.map(k => k.color);
+    FBC.pixelsPerColor = kept.map(k => k.pixels);
+    FBC.filledPerColor = new Array(FBC.quantizedPalette.length).fill(0);
     FBC.filledMask = new Uint8Array(SIZE * SIZE);
+
     FBC.canvasImageData = FBC.colorCtx.getImageData(0, 0, SIZE, SIZE);
+    // Save outline image before drawing numbers (for later redraw)
+    FBC.outlineImageData = FBC.outlineCtx.getImageData(0, 0, SIZE, SIZE);
+    const { regions, regionMap } = findColorRegions(FBC.colorMap, FBC.canvasSize);
+    FBC.regions = regions;
+    FBC.regionMap = regionMap;
+    FBC.filledPerRegion = new Array(regions.length).fill(0);
     renderFBCPalette();
+    drawFBCNumbers();
+    // Auto-select first color
+    if (FBC.quantizedPalette.length > 0) selectFBCColor(0);
+    updateFBCSwatches();
   }
 
   // ── Median Cut Color Quantization ──
@@ -1584,7 +1675,75 @@
       btn.style.background = c.hex;
       btn.dataset.idx = idx;
       btn.addEventListener('click', () => selectFBCColor(idx));
+      const label = document.createElement('span');
+      label.className = 'fbc-swatch-num';
+      label.textContent = idx + 1;
+      btn.appendChild(label);
       pal.appendChild(btn);
+    });
+  }
+
+  function findColorRegions(colorMap, SIZE) {
+    // regionMap: pixel index → region index (0xFFFF = none)
+    const regionMap = new Uint16Array(SIZE * SIZE);
+    regionMap.fill(0xFFFF);
+    const regions = [];
+    const dirs = [1, -1, SIZE, -SIZE];
+    for (let i = 0; i < SIZE * SIZE; i++) {
+      if (regionMap[i] !== 0xFFFF || colorMap[i] === 255) continue;
+      const ci = colorMap[i];
+      const queue = [i];
+      regionMap[i] = regions.length; // tentative
+      let sumX = 0, sumY = 0, count = 0;
+      let head = 0;
+      while (head < queue.length) {
+        const p = queue[head++];
+        const px = p % SIZE, py = (p - px) / SIZE;
+        sumX += px; sumY += py; count++;
+        for (let d = 0; d < 4; d++) {
+          const np = p + dirs[d];
+          if (np < 0 || np >= SIZE * SIZE) continue;
+          if (dirs[d] === 1 && (p % SIZE) === SIZE - 1) continue;
+          if (dirs[d] === -1 && (p % SIZE) === 0) continue;
+          if (regionMap[np] !== 0xFFFF || colorMap[np] !== ci) continue;
+          regionMap[np] = regions.length;
+          queue.push(np);
+        }
+      }
+      if (count >= 200) {
+        regions.push({ colorIdx: ci, cx: Math.round(sumX / count), cy: Math.round(sumY / count), size: count });
+      } else {
+        // Too small — clear regionMap for these pixels
+        for (let j = 0; j < queue.length; j++) regionMap[queue[j]] = 0xFFFF;
+      }
+    }
+    return { regions, regionMap };
+  }
+
+  function drawFBCNumbers() {
+    // Restore clean outline first
+    if (FBC.outlineImageData) {
+      FBC.outlineCtx.putImageData(FBC.outlineImageData, 0, 0);
+    }
+    const regions = FBC.regions || [];
+    const filledPerRegion = FBC.filledPerRegion || [];
+    const ctx = FBC.outlineCtx;
+    regions.forEach((r, ri) => {
+      // Skip if this individual region is fully painted
+      if (filledPerRegion[ri] >= r.size) return;
+      const num = String(r.colorIdx + 1);
+      const fontSize = Math.max(8, Math.min(16, Math.sqrt(r.size) / 4));
+      ctx.font = `bold ${fontSize}px sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      // white background circle
+      ctx.beginPath();
+      ctx.arc(r.cx, r.cy, fontSize * 0.7, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(255,255,255,0.85)';
+      ctx.fill();
+      // number
+      ctx.fillStyle = '#333';
+      ctx.fillText(num, r.cx, r.cy);
     });
   }
 
@@ -1609,6 +1768,8 @@
     const cm = FBC.colorMap;
     const fm = FBC.filledMask;
     const r2 = radius * radius;
+    const selIdx = FBC.selectedColorIdx;
+    const selColor = FBC.quantizedPalette[selIdx];
 
     const xMin = Math.max(0, Math.floor(cx - radius));
     const xMax = Math.min(SIZE - 1, Math.ceil(cx + radius));
@@ -1625,11 +1786,18 @@
         const pi = idx * 4;
         if (FBC.erasing) {
           data[pi] = 255; data[pi + 1] = 255; data[pi + 2] = 255; data[pi + 3] = 255;
-          fm[idx] = 0;
-        } else if (cm[idx] === FBC.selectedColorIdx) {
-          const c = FBC.quantizedPalette[FBC.selectedColorIdx];
-          data[pi] = c.r; data[pi + 1] = c.g; data[pi + 2] = c.b; data[pi + 3] = 255;
-          fm[idx] = 1;
+          if (fm[idx] === 1) {
+            fm[idx] = 0; FBC.filledPerColor[cm[idx]]--;
+            const ri = FBC.regionMap[idx];
+            if (ri !== 0xFFFF) FBC.filledPerRegion[ri]--;
+          }
+        } else if (cm[idx] === selIdx) {
+          data[pi] = selColor.r; data[pi + 1] = selColor.g; data[pi + 2] = selColor.b; data[pi + 3] = 255;
+          if (fm[idx] === 0) {
+            fm[idx] = 1; FBC.filledPerColor[cm[idx]]++;
+            const ri = FBC.regionMap[idx];
+            if (ri !== 0xFFFF) FBC.filledPerRegion[ri]++;
+          }
         }
       }
     }
@@ -1656,7 +1824,9 @@
     const SIZE = FBC.canvasSize;
     const snap = FBC.colorCtx.getImageData(0, 0, SIZE, SIZE);
     const maskSnap = new Uint8Array(FBC.filledMask);
-    FBC.history.push({ imageData: new ImageData(new Uint8ClampedArray(snap.data), snap.width, snap.height), mask: maskSnap });
+    const filledSnap = [...FBC.filledPerColor];
+    const regionSnap = [...FBC.filledPerRegion];
+    FBC.history.push({ imageData: new ImageData(new Uint8ClampedArray(snap.data), snap.width, snap.height), mask: maskSnap, filled: filledSnap, filledRegion: regionSnap });
     if (FBC.history.length > FBC_MAX_HISTORY) FBC.history.shift();
 
     FBC.painting = true;
@@ -1686,6 +1856,31 @@
   function onFBCUp() {
     if (!FBC.painting) return;
     FBC.painting = false;
+    updateFBCSwatches();
+  }
+
+  function updateFBCSwatches() {
+    let totalPixels = 0, totalFilled = 0;
+    $('fbc-palette').querySelectorAll('.fbc-swatch').forEach(s => {
+      const ci = parseInt(s.dataset.idx);
+      const total = FBC.pixelsPerColor[ci] || 0;
+      const filled = FBC.filledPerColor[ci] || 0;
+      totalPixels += total;
+      totalFilled += filled;
+      s.classList.toggle('completed', total > 0 && filled >= total);
+    });
+    // Redraw numbers (hides individually completed regions)
+    drawFBCNumbers();
+    // Overall completion — show once only
+    if (totalPixels > 0 && totalFilled >= totalPixels * 0.99 && !FBC.completedShown) {
+      FBC.completedShown = true;
+      const wrap = document.querySelector('.fbc-canvas-wrap');
+      const overlay = document.createElement('div');
+      overlay.className = 'fbc-complete-overlay';
+      overlay.innerHTML = '<span>Complete!</span>';
+      overlay.addEventListener('click', () => overlay.remove());
+      wrap.appendChild(overlay);
+    }
   }
 
   function clearFBC() {
@@ -1694,7 +1889,16 @@
     FBC.colorCtx.fillRect(0, 0, SIZE, SIZE);
     FBC.canvasImageData = FBC.colorCtx.getImageData(0, 0, SIZE, SIZE);
     FBC.filledMask = new Uint8Array(SIZE * SIZE);
+    FBC.filledPerColor = new Array(FBC.quantizedPalette.length).fill(0);
+    FBC.filledPerRegion = new Array((FBC.regions || []).length).fill(0);
     FBC.history = [];
+    FBC.completedShown = false;
+    const wrap = document.querySelector('.fbc-canvas-wrap');
+    const overlay = wrap.querySelector('.fbc-complete-overlay');
+    if (overlay) overlay.remove();
+    // Redraw all numbers
+    drawFBCNumbers();
+    updateFBCSwatches();
   }
 
   function undoFBC() {
@@ -1703,6 +1907,9 @@
     FBC.colorCtx.putImageData(snap.imageData, 0, 0);
     FBC.canvasImageData = FBC.colorCtx.getImageData(0, 0, FBC.canvasSize, FBC.canvasSize);
     FBC.filledMask = snap.mask;
+    FBC.filledPerColor = snap.filled;
+    FBC.filledPerRegion = snap.filledRegion || new Array((FBC.regions || []).length).fill(0);
+    updateFBCSwatches();
   }
 
   // Wire FBC canvas events
@@ -1712,18 +1919,20 @@
   fbcColorCanvas.addEventListener('pointerup', onFBCUp);
   fbcColorCanvas.addEventListener('pointercancel', onFBCUp);
 
-  // FBC Brush size buttons
-  document.querySelectorAll('.fbc-brush-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      if (btn.id === 'fbc-eraser-btn') {
-        FBC.erasing = true;
-      } else {
-        FBC.erasing = false;
-        FBC.brushSize = parseInt(btn.dataset.size);
-      }
-      document.querySelectorAll('.fbc-brush-btn').forEach(b => b.classList.toggle('active', b === btn));
-      updateBrushCursor($('fbc-color-canvas'), FBC.brushSize, FBC.canvasSize);
-    });
+  // FBC brush range slider
+  const fbcBrushRange = $('fbc-brush-range');
+  const fbcBrushLabel = $('fbc-brush-label');
+  fbcBrushRange.addEventListener('input', () => {
+    FBC.brushSize = parseInt(fbcBrushRange.value);
+    fbcBrushLabel.textContent = fbcBrushRange.value;
+    FBC.erasing = false;
+    $('fbc-eraser-btn').classList.remove('active');
+    updateBrushCursor($('fbc-color-canvas'), FBC.brushSize, FBC.canvasSize);
+  });
+  $('fbc-eraser-btn').addEventListener('click', () => {
+    FBC.erasing = !FBC.erasing;
+    $('fbc-eraser-btn').classList.toggle('active', FBC.erasing);
+    updateBrushCursor($('fbc-color-canvas'), FBC.brushSize, FBC.canvasSize);
   });
 
   $('fill-color-btn').addEventListener('click', openFBCGame);

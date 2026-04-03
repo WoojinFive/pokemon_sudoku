@@ -1432,11 +1432,15 @@
     return new Promise((resolve, reject) => {
       const img = new Image();
       img.crossOrigin = 'anonymous';
-      img.onload = () => { finishFBCProcess(img); resolve(); };
+      img.onload = () => {
+        requestAnimationFrame(() => { finishFBCProcess(img); resolve(); });
+      };
       img.onerror = () => {
         const fallback = new Image();
         fallback.crossOrigin = 'anonymous';
-        fallback.onload = () => { finishFBCProcess(fallback); resolve(); };
+        fallback.onload = () => {
+          requestAnimationFrame(() => { finishFBCProcess(fallback); resolve(); });
+        };
         fallback.onerror = reject;
         fallback.src = `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${id}.png`;
       };
@@ -1452,80 +1456,20 @@
     const { colorMap, pixelsPerColor } = buildColorMap(srcImageData, merged, SIZE);
     FBC.colorMap = colorMap;
 
-    // Region-based cleanup: find same-color connected components,
-    // remove colors that have NO region >= MIN_VISIBLE pixels,
-    // and remove individual tiny same-color patches.
-    const MIN_VISIBLE = 200;
-    const hasVisibleRegion = new Uint8Array(merged.length);
-    {
-      const visited = new Uint8Array(SIZE * SIZE);
-      const dirs = [1, -1, SIZE, -SIZE];
-      for (let i = 0; i < SIZE * SIZE; i++) {
-        if (visited[i] || colorMap[i] === 255) continue;
-        const ci = colorMap[i];
-        const queue = [i];
-        visited[i] = 1;
-        let head = 0;
-        while (head < queue.length) {
-          const p = queue[head++];
-          for (let d = 0; d < 4; d++) {
-            const np = p + dirs[d];
-            if (np < 0 || np >= SIZE * SIZE) continue;
-            if (dirs[d] === 1 && (p % SIZE) === SIZE - 1) continue;
-            if (dirs[d] === -1 && (p % SIZE) === 0) continue;
-            if (visited[np] || colorMap[np] !== ci) continue;
-            visited[np] = 1;
-            queue.push(np);
-          }
-        }
-        if (queue.length >= MIN_VISIBLE) {
-          hasVisibleRegion[ci] = 1;
-        } else {
-          // Tiny same-color patch: mark unpaintable
-          for (let j = 0; j < queue.length; j++) {
-            pixelsPerColor[colorMap[queue[j]]]--;
-            colorMap[queue[j]] = 255;
-          }
-        }
-      }
-    }
-    // Remove colors with no visible region at all
-    for (let ci = 0; ci < merged.length; ci++) {
-      if (!hasVisibleRegion[ci] && pixelsPerColor[ci] > 0) {
-        for (let i = 0; i < SIZE * SIZE; i++) {
-          if (colorMap[i] === ci) colorMap[i] = 255;
-        }
-        pixelsPerColor[ci] = 0;
-      }
-    }
-
-    // Compact palette: remove zero-pixel colors, remap colorMap
-    const kept = [];
-    const remap = new Array(merged.length).fill(255);
-    for (let ci = 0; ci < merged.length; ci++) {
-      if (pixelsPerColor[ci] > 0) {
-        remap[ci] = kept.length;
-        kept.push({ color: merged[ci], pixels: pixelsPerColor[ci] });
-      }
-    }
-    for (let i = 0; i < SIZE * SIZE; i++) {
-      if (colorMap[i] !== 255) colorMap[i] = remap[colorMap[i]];
-    }
-    FBC.quantizedPalette = kept.map(k => k.color);
-    FBC.pixelsPerColor = kept.map(k => k.pixels);
-    FBC.filledPerColor = new Array(FBC.quantizedPalette.length).fill(0);
+    // Single-pass: region BFS + tiny removal + palette compact
+    const result = buildRegionsAndCleanup(colorMap, pixelsPerColor, merged, SIZE);
+    FBC.quantizedPalette = result.quantizedPalette;
+    FBC.pixelsPerColor = result.pixelsPerColor;
+    FBC.regions = result.regions;
+    FBC.regionMap = result.regionMap;
+    FBC.filledPerColor = new Array(result.quantizedPalette.length).fill(0);
+    FBC.filledPerRegion = new Array(result.regions.length).fill(0);
     FBC.filledMask = new Uint8Array(SIZE * SIZE);
 
     FBC.canvasImageData = FBC.colorCtx.getImageData(0, 0, SIZE, SIZE);
-    // Save outline image before drawing numbers (for later redraw)
     FBC.outlineImageData = FBC.outlineCtx.getImageData(0, 0, SIZE, SIZE);
-    const { regions, regionMap } = findColorRegions(FBC.colorMap, FBC.canvasSize);
-    FBC.regions = regions;
-    FBC.regionMap = regionMap;
-    FBC.filledPerRegion = new Array(regions.length).fill(0);
     renderFBCPalette();
     drawFBCNumbers();
-    // Auto-select first color
     if (FBC.quantizedPalette.length > 0) selectFBCColor(0);
     updateFBCSwatches();
   }
@@ -1615,7 +1559,6 @@
     for (let i = 0; i < N; i++) {
       if (s[i * 4 + 3] <= 20) continue;
       const r = s[i * 4], g = s[i * 4 + 1], b = s[i * 4 + 2];
-      // Skip white/near-white and black/near-black pixels (outlines, edges)
       if (r > 230 && g > 230 && b > 230) continue;
       if (r < 30 && g < 30 && b < 30) continue;
       let bestDist = Infinity, bestIdx = 0;
@@ -1628,39 +1571,6 @@
       }
       colorMap[i] = bestIdx;
       pixelsPerColor[bestIdx]++;
-    }
-
-    // Remove tiny paintable regions — flood-fill ANY paintable neighbor (color-agnostic)
-    // so narrow crevices between outlines are treated as one small region and removed.
-    const MIN_REGION = 150;
-    const visited = new Uint8Array(N);
-    const dx4 = [1, -1, SIZE, -SIZE];
-    for (let i = 0; i < N; i++) {
-      if (visited[i] || colorMap[i] === 255) continue;
-      const queue = [i];
-      const region = [];
-      visited[i] = 1;
-      while (queue.length > 0) {
-        const cur = queue.pop();
-        region.push(cur);
-        for (let d = 0; d < 4; d++) {
-          const ni = cur + dx4[d];
-          if (d === 0 && (cur % SIZE) === SIZE - 1) continue;
-          if (d === 1 && (cur % SIZE) === 0) continue;
-          if (ni < 0 || ni >= N || visited[ni]) continue;
-          if (colorMap[ni] !== 255) {
-            visited[ni] = 1;
-            queue.push(ni);
-          }
-        }
-      }
-      if (region.length < MIN_REGION) {
-        for (let ri = 0; ri < region.length; ri++) {
-          const ci = colorMap[region[ri]];
-          pixelsPerColor[ci]--;
-          colorMap[region[ri]] = 255;
-        }
-      }
     }
 
     return { colorMap, pixelsPerColor };
@@ -1683,26 +1593,30 @@
     });
   }
 
-  function findColorRegions(colorMap, SIZE) {
-    // regionMap: pixel index → region index (0xFFFF = none)
-    const regionMap = new Uint16Array(SIZE * SIZE);
+  // Single-pass BFS: removes tiny regions, builds regionMap, computes centroids.
+  // Also removes colors that have no region >= MIN_VIS and compacts the palette.
+  function buildRegionsAndCleanup(colorMap, pixelsPerColor, palette, SIZE) {
+    const N = SIZE * SIZE;
+    const MIN_VIS = 200;
+    const regionMap = new Uint16Array(N);
     regionMap.fill(0xFFFF);
     const regions = [];
+    const hasVisibleRegion = new Uint8Array(palette.length);
     const dirs = [1, -1, SIZE, -SIZE];
-    for (let i = 0; i < SIZE * SIZE; i++) {
+
+    for (let i = 0; i < N; i++) {
       if (regionMap[i] !== 0xFFFF || colorMap[i] === 255) continue;
       const ci = colorMap[i];
       const queue = [i];
       regionMap[i] = regions.length; // tentative
-      let sumX = 0, sumY = 0, count = 0;
-      let head = 0;
+      let sumX = 0, sumY = 0, head = 0;
       while (head < queue.length) {
         const p = queue[head++];
         const px = p % SIZE, py = (p - px) / SIZE;
-        sumX += px; sumY += py; count++;
+        sumX += px; sumY += py;
         for (let d = 0; d < 4; d++) {
           const np = p + dirs[d];
-          if (np < 0 || np >= SIZE * SIZE) continue;
+          if (np < 0 || np >= N) continue;
           if (dirs[d] === 1 && (p % SIZE) === SIZE - 1) continue;
           if (dirs[d] === -1 && (p % SIZE) === 0) continue;
           if (regionMap[np] !== 0xFFFF || colorMap[np] !== ci) continue;
@@ -1710,14 +1624,69 @@
           queue.push(np);
         }
       }
-      if (count >= 200) {
+      const count = queue.length;
+      if (count >= MIN_VIS) {
+        hasVisibleRegion[ci] = 1;
         regions.push({ colorIdx: ci, cx: Math.round(sumX / count), cy: Math.round(sumY / count), size: count });
       } else {
-        // Too small — clear regionMap for these pixels
-        for (let j = 0; j < queue.length; j++) regionMap[queue[j]] = 0xFFFF;
+        // Tiny region: mark unpaintable, clear regionMap
+        for (let j = 0; j < count; j++) {
+          pixelsPerColor[colorMap[queue[j]]]--;
+          colorMap[queue[j]] = 255;
+          regionMap[queue[j]] = 0xFFFF;
+        }
       }
     }
-    return { regions, regionMap };
+
+    // Remove colors with no visible region
+    for (let ci = 0; ci < palette.length; ci++) {
+      if (!hasVisibleRegion[ci] && pixelsPerColor[ci] > 0) {
+        for (let i = 0; i < N; i++) {
+          if (colorMap[i] === ci) colorMap[i] = 255;
+        }
+        pixelsPerColor[ci] = 0;
+      }
+    }
+
+    // Compact palette: remove zero-pixel colors, remap everything
+    const kept = [];
+    const remap = new Uint8Array(palette.length);
+    remap.fill(255);
+    for (let ci = 0; ci < palette.length; ci++) {
+      if (pixelsPerColor[ci] > 0) {
+        remap[ci] = kept.length;
+        kept.push({ color: palette[ci], pixels: pixelsPerColor[ci] });
+      }
+    }
+    for (let i = 0; i < N; i++) {
+      if (colorMap[i] !== 255) colorMap[i] = remap[colorMap[i]];
+    }
+    // Remap region colorIdx
+    for (let ri = 0; ri < regions.length; ri++) {
+      regions[ri].colorIdx = remap[regions[ri].colorIdx];
+    }
+    // Build old→new region index mapping
+    const regionRemap = new Uint16Array(regions.length);
+    regionRemap.fill(0xFFFF);
+    const validRegions = [];
+    for (let ri = 0; ri < regions.length; ri++) {
+      if (regions[ri].colorIdx !== 255) {
+        regionRemap[ri] = validRegions.length;
+        validRegions.push(regions[ri]);
+      }
+    }
+    // Single pass to remap regionMap
+    for (let i = 0; i < N; i++) {
+      const ri = regionMap[i];
+      regionMap[i] = (ri !== 0xFFFF) ? regionRemap[ri] : 0xFFFF;
+    }
+
+    return {
+      quantizedPalette: kept.map(k => k.color),
+      pixelsPerColor: kept.map(k => k.pixels),
+      regions: validRegions,
+      regionMap: regionMap,
+    };
   }
 
   function drawFBCNumbers() {
